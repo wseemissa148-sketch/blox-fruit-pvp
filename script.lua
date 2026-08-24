@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -11,22 +12,49 @@ local Camera = workspace.CurrentCamera
 -- ==========================================
 
 _G.Config = {
+    -- Aimbot Config
     PlayerAimbot = false,
     PlayerAimbotKey = "G",
     MobAimbot = false,
     MobAimbotKey = "H",
     
+    -- Fast Attack Config
+    FastAttack = false,
+    FastAttackKey = "X",
+    AttackRange = 60,
+
+    -- Visuals Config
     ShowHealth = true,
     HealthStyle = "Modern Card", -- "Modern Card", "Classic Bar", "Text Only"
     PlayerHealthColor = {R = 0, G = 255, B = 150},
     MobHealthColor = {R = 255, G = 50, B = 50},
 
+    -- Target Filters
     Whitelist = {},
     TargetList = {}
 }
 
 -- ==========================================
--- 2. HEALTH OVERLAY ENGINE
+-- 2. HELPER FUNCTIONS
+-- ==========================================
+
+local function IsWhitelisted(name)
+    for _, v in ipairs(_G.Config.Whitelist) do
+        if v:lower() == name:lower() then return true end
+    end
+    return false
+end
+
+local function IsTargeted(name)
+    if #_G.Config.TargetList == 0 then return true end
+    for _, v in ipairs(_G.Config.TargetList) do
+        if v:lower() == name:lower() then return true end
+    end
+    return false
+end
+
+-- ==========================================
+-- 3. HEALTH OVERLAY ENGINE
 -- ==========================================
 
 local function RemoveHealthUI(character)
@@ -170,23 +198,8 @@ end
 task.spawn(HookEnemies)
 
 -- ==========================================
--- 3. AIMBOT ENGINE
+-- 4. AIMBOT ENGINE
 -- ==========================================
-
-local function IsWhitelisted(name)
-    for _, v in ipairs(_G.Config.Whitelist) do
-        if v:lower() == name:lower() then return true end
-    end
-    return false
-end
-
-local function IsTargeted(name)
-    if #_G.Config.TargetList == 0 then return true end
-    for _, v in ipairs(_G.Config.TargetList) do
-        if v:lower() == name:lower() then return true end
-    end
-    return false
-end
 
 local function GetClosestTarget(isPlayerTarget)
     local char = LocalPlayer.Character
@@ -221,17 +234,6 @@ local function GetClosestTarget(isPlayerTarget)
     return closest
 end
 
-UserInputService.InputBegan:Connect(function(input, processed)
-    if processed then return end
-    pcall(function()
-        if input.KeyCode == Enum.KeyCode[_G.Config.PlayerAimbotKey] then
-            _G.Config.PlayerAimbot = not _G.Config.PlayerAimbot
-        elseif input.KeyCode == Enum.KeyCode[_G.Config.MobAimbotKey] then
-            _G.Config.MobAimbot = not _G.Config.MobAimbot
-        end
-    end)
-end)
-
 RunService.RenderStepped:Connect(function()
     local targetHrp = nil
     if _G.Config.PlayerAimbot then
@@ -246,7 +248,83 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ==========================================
--- 4. USER INTERFACE (GUI)
+-- 5. FAST ATTACK ENGINE
+-- ==========================================
+
+local function PerformAttack()
+    if not _G.Config.FastAttack then return end
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+
+    local targets = {}
+    local myPos = char.HumanoidRootPart.Position
+
+    -- Enemies Collection
+    local enemies = workspace:FindFirstChild("Enemies")
+    if enemies then
+        for _, mob in pairs(enemies:GetChildren()) do
+            local hrp = mob:FindFirstChild("HumanoidRootPart")
+            local hum = mob:FindFirstChild("Humanoid")
+            if hrp and hum and hum.Health > 0 then
+                if (myPos - hrp.Position).Magnitude <= _G.Config.AttackRange then
+                    table.insert(targets, hrp)
+                end
+            end
+        end
+    end
+
+    -- Players Collection
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character and not IsWhitelisted(plr.Name) and IsTargeted(plr.Name) then
+            local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+            local hum = plr.Character:FindFirstChild("Humanoid")
+            if hrp and hum and hum.Health > 0 then
+                if (myPos - hrp.Position).Magnitude <= _G.Config.AttackRange then
+                    table.insert(targets, hrp)
+                end
+            end
+        end
+    end
+
+    -- Send Attack Remote Calls
+    if #targets > 0 then
+        pcall(function()
+            local netModule = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Net")
+            netModule:WaitForChild("RE/RegisterAttack"):FireServer(0.1)
+
+            for _, hitTarget in pairs(targets) do
+                local attackId = tostring(math.random(100000, 999999))
+                netModule:WaitForChild("RE/RegisterHit"):FireServer(hitTarget, {}, [4] = attackId)
+            end
+        end)
+    end
+end
+
+task.spawn(function()
+    while task.wait() do
+        PerformAttack()
+    end
+end)
+
+-- ==========================================
+-- 6. KEYBIND LISTENER
+-- ==========================================
+
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    pcall(function()
+        if input.KeyCode == Enum.KeyCode[_G.Config.PlayerAimbotKey] then
+            _G.Config.PlayerAimbot = not _G.Config.PlayerAimbot
+        elseif input.KeyCode == Enum.KeyCode[_G.Config.MobAimbotKey] then
+            _G.Config.MobAimbot = not _G.Config.MobAimbot
+        elseif input.KeyCode == Enum.KeyCode[_G.Config.FastAttackKey] then
+            _G.Config.FastAttack = not _G.Config.FastAttack
+        end
+    end)
+end)
+
+-- ==========================================
+-- 7. USER INTERFACE (GUI)
 -- ==========================================
 
 if CoreGui:FindFirstChild("BloxFruitsUltraHubUI") then
@@ -258,7 +336,7 @@ ScreenGui.Name = "BloxFruitsUltraHubUI"
 ScreenGui.Parent = CoreGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 510, 0, 340)
+MainFrame.Size = UDim2.new(0, 510, 0, 360)
 MainFrame.Position = UDim2.new(0.5, -255, 0.25, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(13, 16, 24)
 MainFrame.BorderSizePixel = 0
@@ -578,12 +656,19 @@ local function AddDropdown(parentPage, title, optionsList, configVar)
     end)
 end
 
+-- ==========================================
+-- 8. TABS INITIALIZATION
+-- ==========================================
+
 local CombatTab = CreateTab("⚔️ Combat & Aimbot")
 local VisualsTab = CreateTab("👁️ Health & UI")
 
 tabs[1].Page.Visible = true
 tabs[1].Btn.TextColor3 = Color3.fromRGB(0, 180, 255)
 
+-- Add Controls to Combat Tab
+AddToggle(CombatTab, "Fast Attack", "FastAttack")
+AddKeybindPicker(CombatTab, "Fast Attack Key", "FastAttackKey")
 AddToggle(CombatTab, "Player Skill Aimbot", "PlayerAimbot")
 AddKeybindPicker(CombatTab, "Player Aimbot Key", "PlayerAimbotKey")
 AddToggle(CombatTab, "Mob Skill Aimbot", "MobAimbot")
@@ -591,5 +676,6 @@ AddKeybindPicker(CombatTab, "Mob Aimbot Key", "MobAimbotKey")
 AddListManager(CombatTab, "🛡️ Whitelist", _G.Config.Whitelist)
 AddListManager(CombatTab, "🎯 Target List", _G.Config.TargetList)
 
+-- Add Controls to Visuals Tab
 AddToggle(VisualsTab, "Show Health Overlay", "ShowHealth")
 AddDropdown(VisualsTab, "Health Style", {"Modern Card", "Classic Bar", "Text Only"}, "HealthStyle")
