@@ -1,3 +1,6 @@
+-- Blox Fruits Ultra Combat Hub (Fast Attack + Aimbot + Health ESP)
+-- Compatible with Xeno Executor
+
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
@@ -248,7 +251,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ==========================================
--- 5. FAST ATTACK ENGINE
+-- 5. FAST ATTACK ENGINE (Xeno Optimized)
 -- ==========================================
 
 local function PerformAttack()
@@ -286,7 +289,7 @@ local function PerformAttack()
         end
     end
 
-    -- Send Attack Remote Calls
+    -- Send Remote Attacks
     if #targets > 0 then
         pcall(function()
             local netModule = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Net")
@@ -327,13 +330,15 @@ end)
 -- 7. USER INTERFACE (GUI)
 -- ==========================================
 
-if CoreGui:FindFirstChild("BloxFruitsUltraHubUI") then
-    CoreGui.BloxFruitsUltraHubUI:Destroy()
+local parentContainer = (gethui and gethui()) or CoreGui
+
+if parentContainer:FindFirstChild("BloxFruitsUltraHubUI") then
+    parentContainer.BloxFruitsUltraHubUI:Destroy()
 end
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "BloxFruitsUltraHubUI"
-ScreenGui.Parent = CoreGui
+ScreenGui.Parent = parentContainer
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 510, 0, 360)
