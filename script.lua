@@ -7,7 +7,7 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 -- ==========================================
--- 1. نظام الإعدادات
+-- 1. CONFIGURATION
 -- ==========================================
 
 _G.Config = {
@@ -17,16 +17,16 @@ _G.Config = {
     MobAimbotKey = "H",
     
     ShowHealth = true,
-    HealthStyle = "Modern Card", -- الخيارات: "Text Only", "Classic Bar", "Modern Card"
+    HealthStyle = "Modern Card", -- "Modern Card", "Classic Bar", "Text Only"
     PlayerHealthColor = {R = 0, G = 255, B = 150},
     MobHealthColor = {R = 255, G = 50, B = 50},
 
-    Whitelist = {},     -- قائمة اللاعبين المحميين من الايمبوت
-    TargetList = {}     -- قائمة اللاعبين المحددين فقط للاستهدف
+    Whitelist = {},
+    TargetList = {}
 }
 
 -- ==========================================
--- 2. محرك عرض الصحة (متعدد الأشكال وخفيف جداً)
+-- 2. HEALTH OVERLAY ENGINE
 -- ==========================================
 
 local function RemoveHealthUI(character)
@@ -143,7 +143,6 @@ local function CreateHealthUI(character, isPlayer)
     hum.Died:Connect(function() bb:Destroy() end)
 end
 
--- ربط الأحداث المباشرة (بدون لاج وبدون التكرار المجهد)
 local function SetupCharacterUI(char, isPlayer)
     if char then
         task.defer(function() CreateHealthUI(char, isPlayer) end)
@@ -171,7 +170,7 @@ end
 task.spawn(HookEnemies)
 
 -- ==========================================
--- 3. محرك Aimbot المطور والدقيق
+-- 3. AIMBOT ENGINE
 -- ==========================================
 
 local function IsWhitelisted(name)
@@ -247,7 +246,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ==========================================
--- 4. واجهة المستخدم (UI)
+-- 4. USER INTERFACE (GUI)
 -- ==========================================
 
 if CoreGui:FindFirstChild("BloxFruitsUltraHubUI") then
@@ -476,7 +475,7 @@ local function AddListManager(parentPage, title, listTable)
     TextBox.Position = UDim2.new(0.03, 0, 0.35, 0)
     TextBox.BackgroundColor3 = Color3.fromRGB(15, 18, 26)
     TextBox.Text = ""
-    TextBox.PlaceholderText = "اسم اللاعب..."
+    TextBox.PlaceholderText = "Player Name..."
     TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
     TextBox.Font = Enum.Font.GothamMedium
     TextBox.TextSize = 8
@@ -490,7 +489,7 @@ local function AddListManager(parentPage, title, listTable)
     AddBtn.Size = UDim2.new(0.18, 0, 0, 24)
     AddBtn.Position = UDim2.new(0.60, 0, 0.35, 0)
     AddBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
-    AddBtn.Text = "إضافة"
+    AddBtn.Text = "Add"
     AddBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     AddBtn.Font = Enum.Font.GothamBold
     AddBtn.TextSize = 8
@@ -500,7 +499,7 @@ local function AddListManager(parentPage, title, listTable)
     RemoveBtn.Size = UDim2.new(0.18, 0, 0, 24)
     RemoveBtn.Position = UDim2.new(0.79, 0, 0.35, 0)
     RemoveBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
-    RemoveBtn.Text = "إزالة"
+    RemoveBtn.Text = "Remove"
     RemoveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     RemoveBtn.Font = Enum.Font.GothamBold
     RemoveBtn.TextSize = 8
@@ -509,7 +508,7 @@ local function AddListManager(parentPage, title, listTable)
     local StatusLabel = Instance.new("TextLabel")
     StatusLabel.Size = UDim2.new(1, -10, 0, 15)
     StatusLabel.Position = UDim2.new(0, 5, 0.75, 0)
-    StatusLabel.Text = "العناصر: " .. table.concat(listTable, ", ")
+    StatusLabel.Text = "List: " .. table.concat(listTable, ", ")
     StatusLabel.TextColor3 = Color3.fromRGB(150, 160, 175)
     StatusLabel.Font = Enum.Font.GothamMedium
     StatusLabel.TextSize = 8
@@ -521,7 +520,7 @@ local function AddListManager(parentPage, title, listTable)
         local name = TextBox.Text
         if name ~= "" and not table.find(listTable, name) then
             table.insert(listTable, name)
-            StatusLabel.Text = "العناصر: " .. table.concat(listTable, ", ")
+            StatusLabel.Text = "List: " .. table.concat(listTable, ", ")
             TextBox.Text = ""
         end
     end)
@@ -531,7 +530,7 @@ local function AddListManager(parentPage, title, listTable)
         local idx = table.find(listTable, name)
         if idx then
             table.remove(listTable, idx)
-            StatusLabel.Text = "العناصر: " .. table.concat(listTable, ", ")
+            StatusLabel.Text = "List: " .. table.concat(listTable, ", ")
             TextBox.Text = ""
         end
     end)
@@ -573,28 +572,24 @@ local function AddDropdown(parentPage, title, optionsList, configVar)
         _G.Config[configVar] = optionsList[idx]
         DropBtn.Text = optionsList[idx]
         
-        -- إعادة تحديث واجهات الدم لتطبيق الشكل الجديد
         for _, p in pairs(Players:GetPlayers()) do
             if p.Character then SetupCharacterUI(p.Character, p ~= LocalPlayer) end
         end
     end)
 end
 
--- بناء الأقسام
 local CombatTab = CreateTab("⚔️ Combat & Aimbot")
 local VisualsTab = CreateTab("👁️ Health & UI")
 
 tabs[1].Page.Visible = true
 tabs[1].Btn.TextColor3 = Color3.fromRGB(0, 180, 255)
 
--- عناصر قسم Combat
 AddToggle(CombatTab, "Player Skill Aimbot", "PlayerAimbot")
 AddKeybindPicker(CombatTab, "Player Aimbot Key", "PlayerAimbotKey")
 AddToggle(CombatTab, "Mob Skill Aimbot", "MobAimbot")
 AddKeybindPicker(CombatTab, "Mob Aimbot Key", "MobAimbotKey")
-AddListManager(CombatTab, "🛡️ Whitelist (تجاهل اللاعبين)", _G.Config.Whitelist)
-AddListManager(CombatTab, "🎯 Target List (استهداف مخصص)", _G.Config.TargetList)
+AddListManager(CombatTab, "🛡️ Whitelist", _G.Config.Whitelist)
+AddListManager(CombatTab, "🎯 Target List", _G.Config.TargetList)
 
--- عناصر قسم Visuals
 AddToggle(VisualsTab, "Show Health Overlay", "ShowHealth")
-AddDropdown(VisualsTab, "شكل واجهة الدم", {"Modern Card", "Classic Bar", "Text Only"}, "HealthStyle")
+AddDropdown(VisualsTab, "Health Style", {"Modern Card", "Classic Bar", "Text Only"}, "HealthStyle")
