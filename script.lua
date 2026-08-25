@@ -16,6 +16,9 @@ _G.Config = {
     MobAimbot = false,
     MobAimbotKey = "H",
     
+    AimbotSmoothness = 0.25, -- مدى smoothness الحركة (كلما قل الرقم كان أسرع، 0.25 متوازن وسلس جداً)
+    TargetPart = "Head", -- يستهدف الرأس لزيادة الدقة
+    
     ShowHealth = true,
     HealthStyle = "Modern Card", -- "Modern Card", "Classic Bar", "Text Only"
     PlayerHealthColor = {R = 0, G = 255, B = 150},
@@ -170,7 +173,7 @@ end
 task.spawn(HookEnemies)
 
 -- ==========================================
--- 3. AIMBOT ENGINE
+-- 3. SMOOTH & POWERFUL AIMBOT ENGINE
 -- ==========================================
 
 local function IsWhitelisted(name)
@@ -197,11 +200,11 @@ local function GetClosestTarget(isPlayerTarget)
     if isPlayerTarget then
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= LocalPlayer and p.Character and not IsWhitelisted(p.Name) and IsTargeted(p.Name) then
-                local pHrp = p.Character:FindFirstChild("HumanoidRootPart")
+                local targetPart = p.Character:FindFirstChild(_G.Config.TargetPart) or p.Character:FindFirstChild("HumanoidRootPart")
                 local pHum = p.Character:FindFirstChild("Humanoid")
-                if pHrp and pHum and pHum.Health > 0 then
-                    local dist = (myPos - pHrp.Position).Magnitude
-                    if dist < shortestDist then shortestDist = dist; closest = pHrp end
+                if targetPart and pHum and pHum.Health > 0 then
+                    local dist = (myPos - targetPart.Position).Magnitude
+                    if dist < shortestDist then shortestDist = dist; closest = targetPart end
                 end
             end
         end
@@ -209,11 +212,11 @@ local function GetClosestTarget(isPlayerTarget)
         local enemies = workspace:FindFirstChild("Enemies")
         if enemies then
             for _, mob in pairs(enemies:GetChildren()) do
-                local mHrp = mob:FindFirstChild("HumanoidRootPart")
+                local targetPart = mob:FindFirstChild(_G.Config.TargetPart) or mob:FindFirstChild("HumanoidRootPart")
                 local mHum = mob:FindFirstChild("Humanoid")
-                if mHrp and mHum and mHum.Health > 0 then
-                    local dist = (myPos - mHrp.Position).Magnitude
-                    if dist < shortestDist then shortestDist = dist; closest = mHrp end
+                if targetPart and mHum and mHum.Health > 0 then
+                    local dist = (myPos - targetPart.Position).Magnitude
+                    if dist < shortestDist then shortestDist = dist; closest = targetPart end
                 end
             end
         end
@@ -232,16 +235,29 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end)
 end)
 
+-- محرك التوجيه السلس بـ Lerp لتفادي التعليق وتقطيع الشاشة
 RunService.RenderStepped:Connect(function()
-    local targetHrp = nil
+    local targetPart = nil
     if _G.Config.PlayerAimbot then
-        targetHrp = GetClosestTarget(true)
+        targetPart = GetClosestTarget(true)
     elseif _G.Config.MobAimbot then
-        targetHrp = GetClosestTarget(false)
+        targetPart = GetClosestTarget(false)
     end
 
-    if targetHrp and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool") then
-        Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetHrp.Position)
+    if targetPart and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool") then
+        local targetPos = targetPart.Position
+        
+        -- إضافة Prediction (توقع السرعة للحركة السريعة)
+        if targetPart.Parent:FindFirstChild("HumanoidRootPart") then
+            local velocity = targetPart.Parent.HumanoidRootPart.AssemblyLinearVelocity
+            targetPos = targetPos + (velocity * 0.035)
+        end
+
+        local currentCFrame = Camera.CFrame
+        local targetCFrame = CFrame.new(currentCFrame.Position, targetPos)
+        
+        -- السلاسة المطلقة بدون تعليق
+        Camera.CFrame = currentCFrame:Lerp(targetCFrame, _G.Config.AimbotSmoothness)
     end
 end)
 
@@ -449,6 +465,10 @@ local function AddKeybindPicker(parentPage, name, configVar)
     end)
 end
 
+-- ==========================================
+-- 5. IMPROVED LIST MANAGER (ADD & REMOVE FIXED)
+-- ==========================================
+
 local function AddListManager(parentPage, title, listTable)
     local Frame = Instance.new("Frame")
     Frame.Size = UDim2.new(0.96, 0, 0, 75)
@@ -516,22 +536,34 @@ local function AddListManager(parentPage, title, listTable)
     StatusLabel.BackgroundTransparency = 1
     StatusLabel.Parent = Frame
 
+    -- الإضافة (Add)
     AddBtn.MouseButton1Click:Connect(function()
-        local name = TextBox.Text
-        if name ~= "" and not table.find(listTable, name) then
-            table.insert(listTable, name)
-            StatusLabel.Text = "List: " .. table.concat(listTable, ", ")
-            TextBox.Text = ""
+        local name = TextBox.Text:match("^%s*(.-)%s*$") -- إزالة المسافات الزائدة
+        if name ~= "" then
+            local exists = false
+            for _, v in ipairs(listTable) do
+                if v:lower() == name:lower() then exists = true; break end
+            end
+            if not exists then
+                table.insert(listTable, name)
+                StatusLabel.Text = "List: " .. table.concat(listTable, ", ")
+                TextBox.Text = ""
+            end
         end
     end)
 
+    -- الإزالة (Remove) - معدلة بالكامل لتجاهل أحرف الكابيتال والسمول
     RemoveBtn.MouseButton1Click:Connect(function()
-        local name = TextBox.Text
-        local idx = table.find(listTable, name)
-        if idx then
-            table.remove(listTable, idx)
-            StatusLabel.Text = "List: " .. table.concat(listTable, ", ")
-            TextBox.Text = ""
+        local name = TextBox.Text:match("^%s*(.-)%s*$")
+        if name ~= "" then
+            for idx, v in ipairs(listTable) do
+                if v:lower() == name:lower() then
+                    table.remove(listTable, idx)
+                    StatusLabel.Text = "List: " .. table.concat(listTable, ", ")
+                    TextBox.Text = ""
+                    break
+                end
+            end
         end
     end)
 end
@@ -577,6 +609,10 @@ local function AddDropdown(parentPage, title, optionsList, configVar)
         end
     end)
 end
+
+-- ==========================================
+-- TABS SETUP
+-- ==========================================
 
 local CombatTab = CreateTab("⚔️ Combat & Aimbot")
 local VisualsTab = CreateTab("👁️ Health & UI")
