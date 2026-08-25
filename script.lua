@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -16,8 +17,12 @@ _G.Config = {
     MobAimbot = false,
     MobAimbotKey = "H",
     
-    TargetPart = "Head", -- يستهدف الرأس لتوجيه المهارات بدقة
-    HitboxSize = 15, -- تكبير حجم منطقة الإصابة للخصم لضمان عدم ضياع الضربات
+    AutoDodge = true, -- ميزة التفادي التلقائي
+    DodgeMode = "Instinct + Sori", -- Options: "Instinct Only", "Sori Only", "Instinct + Sori"
+    DodgeDistance = 25, -- مسافة الانتقال السريع للتفادي
+    
+    TargetPart = "Head",
+    HitboxSize = 15,
     
     ShowHealth = true,
     HealthStyle = "Modern Card",
@@ -29,7 +34,114 @@ _G.Config = {
 }
 
 -- ==========================================
--- 2. HEALTH OVERLAY ENGINE
+-- 2. SMART DODGE ENGINE (تنبؤ + انتقال سريع)
+-- ==========================================
+
+local lastDodgeTime = 0
+local dodgeCooldown = 0.35 -- كولدون خفيف لمنع اللاق والتعليق
+
+local function TriggerInstinct()
+    -- محاكاة ضغط مفتاح E لتفعيل هاكي التنبؤ
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+    task.wait(0.05)
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+end
+
+local function TriggerSoriDodge(attackerPos)
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    -- حساب اتجاه التفادي (للخلف أو للجانب بعيداً عن موقع الهجوم)
+    local avoidDirection = (hrp.Position - attackerPos).Unit
+    if avoidDirection.Magnitude == 0 or avoidDirection ~= avoidDirection then
+        avoidDirection = -hrp.CFrame.LookVector
+    end
+
+    -- إضافة القليل من الانحراف الجانبي لجعل الحركة طبيعية وسلسة
+    local sideVector = hrp.CFrame.RightVector * (math.random() > 0.5 and 1 or -1)
+    local targetPos = hrp.Position + (avoidDirection * _G.Config.DodgeDistance) + (sideVector * 10)
+
+    -- انتقال آمن بدون التعليق بالجدران أو الأرض
+    hrp.CFrame = CFrame.new(targetPos, targetPos + hrp.CFrame.LookVector)
+end
+
+local function CheckAndDodge(attacker, toolOrAnim)
+    if not _G.Config.AutoDodge then return end
+    if tick() - lastDodgeTime < dodgeCooldown then return end
+
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChild("Humanoid")
+    if not hrp or not hum or hum.Health <= 0 then return end
+
+    local attackerHrp = attacker:FindFirstChild("HumanoidRootPart")
+    if not attackerHrp then return end
+
+    -- التحقق من أن المهاجم ضمن نطاق الخطر (أقل من 60 استد)
+    local dist = (hrp.Position - attackerHrp.Position).Magnitude
+    if dist <= 60 then
+        lastDodgeTime = tick()
+
+        -- نمط التفادي حسب الإعدادات
+        if _G.Config.DodgeMode == "Instinct Only" then
+            TriggerInstinct()
+        elseif _G.Config.DodgeMode == "Sori Only" then
+            TriggerSoriDodge(attackerHrp.Position)
+        elseif _G.Config.DodgeMode == "Instinct + Sori" then
+            TriggerInstinct()
+            TriggerSoriDodge(attackerHrp.Position)
+        end
+    end
+end
+
+-- مراقبة انيميشن وتفعيل أدوات اللاعبين والبوتات القريبة
+local function HookAttacker(character)
+    if not character or character == LocalPlayer.Character then return end
+    
+    local hum = character:WaitForChild("Humanoid", 3)
+    if not hum then return end
+
+    -- اكتشاف استخدام المهارات والأنيميشن الخاص بالهجوم
+    hum.AnimationPlayed:Connect(function(animTrack)
+        if _G.Config.AutoDodge then
+            CheckAndDodge(character, animTrack)
+        end
+    end)
+
+    -- اكتشاف تفعيل الأدوات/الأسلحة
+    character.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") and _G.Config.AutoDodge then
+            CheckAndDodge(character, child)
+        end
+    end)
+end
+
+-- ربط كاشف الهجوم على جميع اللاعبين
+for _, p in pairs(Players:GetPlayers()) do
+    if p ~= LocalPlayer then
+        if p.Character then HookAttacker(p.Character) end
+        p.CharacterAdded:Connect(HookAttacker)
+    end
+end
+Players.PlayerAdded:Connect(function(p)
+    p.CharacterAdded:Connect(HookAttacker)
+end)
+
+-- ربط كاشف الهجوم على الوحوش والبوتات
+local function HookMobEnemies()
+    local enemies = workspace:FindFirstChild("Enemies")
+    if enemies then
+        for _, mob in pairs(enemies:GetChildren()) do HookAttacker(mob) end
+        enemies.ChildAdded:Connect(HookAttacker)
+    end
+end
+task.spawn(HookMobEnemies)
+
+-- ==========================================
+-- 3. HEALTH OVERLAY ENGINE
 -- ==========================================
 
 local function RemoveHealthUI(character)
@@ -173,7 +285,7 @@ end
 task.spawn(HookEnemies)
 
 -- ==========================================
--- 3. DIRECT & POWERFUL LOCK-ON ENGINE
+-- 4. DIRECT & POWERFUL LOCK-ON ENGINE
 -- ==========================================
 
 local function IsWhitelisted(name)
@@ -235,7 +347,6 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end)
 end)
 
--- قفل مباشر بدون تأخير + توسيع منطقة الإصابة لضمان التثبيت الكامل
 RunService.RenderStepped:Connect(function()
     local targetPart = nil
     if _G.Config.PlayerAimbot then
@@ -245,10 +356,8 @@ RunService.RenderStepped:Connect(function()
     end
 
     if targetPart and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool") then
-        -- قفل مباشر للرؤية نحو الخصم
         Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPart.Position)
 
-        -- توسيع وتثبيت جزء الخصم المستهدف لضمان وصول الضربات حتى عند الركض والقفز
         pcall(function()
             targetPart.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
             targetPart.Transparency = 0.7
@@ -258,7 +367,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ==========================================
--- 4. USER INTERFACE (GUI)
+-- 5. USER INTERFACE (GUI)
 -- ==========================================
 
 if CoreGui:FindFirstChild("BloxFruitsUltraHubUI") then
@@ -270,7 +379,7 @@ ScreenGui.Name = "BloxFruitsUltraHubUI"
 ScreenGui.Parent = CoreGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 510, 0, 340)
+MainFrame.Size = UDim2.new(0, 510, 0, 360)
 MainFrame.Position = UDim2.new(0.5, -255, 0.25, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(13, 16, 24)
 MainFrame.BorderSizePixel = 0
@@ -461,9 +570,43 @@ local function AddKeybindPicker(parentPage, name, configVar)
     end)
 end
 
--- ==========================================
--- 5. LIST MANAGER (CASE-INSENSITIVE)
--- ==========================================
+local function AddDropdown(parentPage, title, optionsList, configVar)
+    local Frame = Instance.new("Frame")
+    Frame.Size = UDim2.new(0.96, 0, 0, 32)
+    Frame.BackgroundColor3 = Color3.fromRGB(22, 26, 38)
+    Frame.Parent = parentPage
+
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 6)
+    Corner.Parent = Frame
+
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(0.5, 0, 1, 0)
+    Label.Text = "  " .. title
+    Label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    Label.Font = Enum.Font.GothamMedium
+    Label.TextSize = 9
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.BackgroundTransparency = 1
+    Label.Parent = Frame
+
+    local DropBtn = Instance.new("TextButton")
+    DropBtn.Size = UDim2.new(0.45, 0, 0.7, 0)
+    DropBtn.Position = UDim2.new(0.52, 0, 0.15, 0)
+    DropBtn.BackgroundColor3 = Color3.fromRGB(35, 45, 68)
+    DropBtn.Text = tostring(_G.Config[configVar])
+    DropBtn.TextColor3 = Color3.fromRGB(0, 180, 255)
+    DropBtn.Font = Enum.Font.GothamBold
+    DropBtn.TextSize = 8
+    DropBtn.Parent = Frame
+
+    local idx = 1
+    DropBtn.MouseButton1Click:Connect(function()
+        idx = (idx % #optionsList) + 1
+        _G.Config[configVar] = optionsList[idx]
+        DropBtn.Text = optionsList[idx]
+    end)
+end
 
 local function AddListManager(parentPage, title, listTable)
     local Frame = Instance.new("Frame")
@@ -562,58 +705,18 @@ local function AddListManager(parentPage, title, listTable)
     end)
 end
 
-local function AddDropdown(parentPage, title, optionsList, configVar)
-    local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(0.96, 0, 0, 32)
-    Frame.BackgroundColor3 = Color3.fromRGB(22, 26, 38)
-    Frame.Parent = parentPage
-
-    local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 6)
-    Corner.Parent = Frame
-
-    local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(0.5, 0, 1, 0)
-    Label.Text = "  " .. title
-    Label.TextColor3 = Color3.fromRGB(200, 200, 200)
-    Label.Font = Enum.Font.GothamMedium
-    Label.TextSize = 9
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.BackgroundTransparency = 1
-    Label.Parent = Frame
-
-    local DropBtn = Instance.new("TextButton")
-    DropBtn.Size = UDim2.new(0.45, 0, 0.7, 0)
-    DropBtn.Position = UDim2.new(0.52, 0, 0.15, 0)
-    DropBtn.BackgroundColor3 = Color3.fromRGB(35, 45, 68)
-    DropBtn.Text = tostring(_G.Config[configVar])
-    DropBtn.TextColor3 = Color3.fromRGB(0, 180, 255)
-    DropBtn.Font = Enum.Font.GothamBold
-    DropBtn.TextSize = 8
-    DropBtn.Parent = Frame
-
-    local idx = 1
-    DropBtn.MouseButton1Click:Connect(function()
-        idx = (idx % #optionsList) + 1
-        _G.Config[configVar] = optionsList[idx]
-        DropBtn.Text = optionsList[idx]
-        
-        for _, p in pairs(Players:GetPlayers()) do
-            if p.Character then SetupCharacterUI(p.Character, p ~= LocalPlayer) end
-        end
-    end)
-end
-
 -- ==========================================
 -- TABS SETUP
 -- ==========================================
 
 local CombatTab = CreateTab("⚔️ Combat & Aimbot")
+local DodgeTab = CreateTab("🛡️ Auto Dodge")
 local VisualsTab = CreateTab("👁️ Health & UI")
 
 tabs[1].Page.Visible = true
 tabs[1].Btn.TextColor3 = Color3.fromRGB(0, 180, 255)
 
+-- Combat Options
 AddToggle(CombatTab, "Player Skill Aimbot", "PlayerAimbot")
 AddKeybindPicker(CombatTab, "Player Aimbot Key", "PlayerAimbotKey")
 AddToggle(CombatTab, "Mob Skill Aimbot", "MobAimbot")
@@ -621,5 +724,10 @@ AddKeybindPicker(CombatTab, "Mob Aimbot Key", "MobAimbotKey")
 AddListManager(CombatTab, "🛡️ Whitelist", _G.Config.Whitelist)
 AddListManager(CombatTab, "🎯 Target List", _G.Config.TargetList)
 
+-- Dodge Options
+AddToggle(DodgeTab, "Enable Auto Dodge", "AutoDodge")
+AddDropdown(DodgeTab, "Dodge Mode", {"Instinct + Sori", "Instinct Only", "Sori Only"}, "DodgeMode")
+
+-- Visual Options
 AddToggle(VisualsTab, "Show Health Overlay", "ShowHealth")
 AddDropdown(VisualsTab, "Health Style", {"Modern Card", "Classic Bar", "Text Only"}, "HealthStyle")
