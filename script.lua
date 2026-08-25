@@ -17,9 +17,9 @@ _G.Config = {
     MobAimbot = false,
     MobAimbotKey = "H",
     
-    AutoDodge = true, -- ميزة التفادي التلقائي
+    AutoDodge = true,
     DodgeMode = "Instinct + Sori", -- Options: "Instinct Only", "Sori Only", "Instinct + Sori"
-    DodgeDistance = 25, -- مسافة الانتقال السريع للتفادي
+    DodgeDistance = 25,
     
     TargetPart = "Head",
     HitboxSize = 15,
@@ -34,92 +34,139 @@ _G.Config = {
 }
 
 -- ==========================================
--- 2. SMART DODGE ENGINE (تنبؤ + انتقال سريع)
+-- 2. ACCURATE HIT PREDICTION & SAFE ZONE ENGINE
 -- ==========================================
 
 local lastDodgeTime = 0
-local dodgeCooldown = 0.35 -- كولدون خفيف لمنع اللاق والتعليق
+local dodgeCooldown = 0.3 -- كولدون خفيف لمنع اللاق
 
+-- التحقق مما إذا كان اللاعب داخل منطقة آمنة (Safe Zone / Non-PVP)
+local function IsInSafeZone(character)
+    if not character then return true end
+    
+    -- فحص خصائص حماية الـ PVP الخاصة بـ Blox Fruits
+    if character:FindFirstChild("PvpDisabled") or character:FindFirstChild("SafeZone") then
+        return true
+    end
+
+    -- فحص المناطق الجغرافية المحمية في الخريطة
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local safeZones = workspace:FindFirstChild("SafeZones") or workspace:FindFirstChild("SafeZone")
+        if safeZones then
+            for _, zone in pairs(safeZones:GetChildren()) do
+                if zone:IsA("BasePart") then
+                    local dist = (hrp.Position - zone.Position).Magnitude
+                    if dist <= (zone.Size.X / 2) then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+-- تفعيل هاكي التنبؤ (Instinct / Observation)
 local function TriggerInstinct()
-    -- محاكاة ضغط مفتاح E لتفعيل هاكي التنبؤ
     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-    task.wait(0.05)
+    task.wait(0.04)
     VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
 end
 
+-- تفعيل الانتقال السريع (Sori / Teleport Dodge)
 local function TriggerSoriDodge(attackerPos)
     local char = LocalPlayer.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    -- حساب اتجاه التفادي (للخلف أو للجانب بعيداً عن موقع الهجوم)
+    -- حساب اتجاه التفادي بعيداً عن خط النار المباشر للضربة
     local avoidDirection = (hrp.Position - attackerPos).Unit
     if avoidDirection.Magnitude == 0 or avoidDirection ~= avoidDirection then
         avoidDirection = -hrp.CFrame.LookVector
     end
 
-    -- إضافة القليل من الانحراف الجانبي لجعل الحركة طبيعية وسلسة
     local sideVector = hrp.CFrame.RightVector * (math.random() > 0.5 and 1 or -1)
-    local targetPos = hrp.Position + (avoidDirection * _G.Config.DodgeDistance) + (sideVector * 10)
+    local targetPos = hrp.Position + (avoidDirection * _G.Config.DodgeDistance) + (sideVector * 8)
 
-    -- انتقال آمن بدون التعليق بالجدران أو الأرض
     hrp.CFrame = CFrame.new(targetPos, targetPos + hrp.CFrame.LookVector)
 end
 
-local function CheckAndDodge(attacker, toolOrAnim)
+-- حساب ما إذا كانت الضربة "مؤكدة القادمة بمسار اللاعب"
+local function IsConfirmedHit(attackerChar, myChar)
+    local attackerHrp = attackerChar:FindFirstChild("HumanoidRootPart")
+    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
+    if not attackerHrp or not myHrp then return false end
+
+    local distance = (myHrp.Position - attackerHrp.Position).Magnitude
+    
+    -- نطاق خطر الضربات القريبة والبعيدة
+    if distance > 50 then return false end
+
+    -- حساب زاوية الرؤية والهجوم: هل وجه الخصم موجه نحو لاعبنا مباشرة؟
+    local attackerLookVector = attackerHrp.CFrame.LookVector
+    local directionToMe = (myHrp.Position - attackerHrp.Position).Unit
+    local dotProduct = attackerLookVector:Dot(directionToMe)
+
+    -- قيمة Dot Product > 0.75 تعني أن الخصم موجه ضربته مباشرة نحو اللاعب بزاوية دقيقة
+    if dotProduct > 0.75 then
+        return true
+    end
+
+    return false
+end
+
+local function ProcessDodge(attacker, source)
     if not _G.Config.AutoDodge then return end
     if tick() - lastDodgeTime < dodgeCooldown then return end
 
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChild("Humanoid")
-    if not hrp or not hum or hum.Health <= 0 then return end
+    local myChar = LocalPlayer.Character
+    if not myChar or IsInSafeZone(myChar) then return end
+    if IsInSafeZone(attacker) then return end -- إلغاء التفادي إذا كان المهاجم في Safe Zone
 
-    local attackerHrp = attacker:FindFirstChild("HumanoidRootPart")
-    if not attackerHrp then return end
+    local myHum = myChar:FindFirstChild("Humanoid")
+    if not myHum or myHum.Health <= 0 then return end
 
-    -- التحقق من أن المهاجم ضمن نطاق الخطر (أقل من 60 استد)
-    local dist = (hrp.Position - attackerHrp.Position).Magnitude
-    if dist <= 60 then
+    -- تحقق استباقي: هل الضربة تتجه مباشرة نحو اللاعب؟
+    if IsConfirmedHit(attacker, myChar) then
         lastDodgeTime = tick()
 
-        -- نمط التفادي حسب الإعدادات
+        local attackerHrp = attacker:FindFirstChild("HumanoidRootPart")
+        local attackerPos = attackerHrp and attackerHrp.Position or myChar.HumanoidRootPart.Position
+
         if _G.Config.DodgeMode == "Instinct Only" then
             TriggerInstinct()
         elseif _G.Config.DodgeMode == "Sori Only" then
-            TriggerSoriDodge(attackerHrp.Position)
+            TriggerSoriDodge(attackerPos)
         elseif _G.Config.DodgeMode == "Instinct + Sori" then
             TriggerInstinct()
-            TriggerSoriDodge(attackerHrp.Position)
+            TriggerSoriDodge(attackerPos)
         end
     end
 end
 
--- مراقبة انيميشن وتفعيل أدوات اللاعبين والبوتات القريبة
+-- ربط كاشف الضربات للعبين والبوتات
 local function HookAttacker(character)
     if not character or character == LocalPlayer.Character then return end
     
     local hum = character:WaitForChild("Humanoid", 3)
     if not hum then return end
 
-    -- اكتشاف استخدام المهارات والأنيميشن الخاص بالهجوم
     hum.AnimationPlayed:Connect(function(animTrack)
         if _G.Config.AutoDodge then
-            CheckAndDodge(character, animTrack)
+            ProcessDodge(character, animTrack)
         end
     end)
 
-    -- اكتشاف تفعيل الأدوات/الأسلحة
     character.ChildAdded:Connect(function(child)
         if child:IsA("Tool") and _G.Config.AutoDodge then
-            CheckAndDodge(character, child)
+            ProcessDodge(character, child)
         end
     end)
 end
 
--- ربط كاشف الهجوم على جميع اللاعبين
 for _, p in pairs(Players:GetPlayers()) do
     if p ~= LocalPlayer then
         if p.Character then HookAttacker(p.Character) end
@@ -130,7 +177,6 @@ Players.PlayerAdded:Connect(function(p)
     p.CharacterAdded:Connect(HookAttacker)
 end)
 
--- ربط كاشف الهجوم على الوحوش والبوتات
 local function HookMobEnemies()
     local enemies = workspace:FindFirstChild("Enemies")
     if enemies then
