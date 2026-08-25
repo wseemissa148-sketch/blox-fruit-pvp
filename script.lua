@@ -18,7 +18,7 @@ _G.Config = {
     MobAimbotKey = "H",
     
     AutoDodge = true,
-    DodgeMode = "Instinct + Sori", -- Options: "Instinct Only", "Sori Only", "Instinct + Sori"
+    DodgeMode = "Smart Adaptive", -- Options: "Smart Adaptive", "Alternating", "Instinct Only", "Sori Only"
     DodgeDistance = 25,
     
     TargetPart = "Head",
@@ -34,22 +34,21 @@ _G.Config = {
 }
 
 -- ==========================================
--- 2. ACCURATE HIT PREDICTION & SAFE ZONE ENGINE
+-- 2. HIGH-PERFORMANCE DODGE ENGINE (SMOOTH & ZERO LAG)
 -- ==========================================
 
 local lastDodgeTime = 0
-local dodgeCooldown = 0.3 -- كولدون خفيف لمنع اللاق
+local dodgeCooldown = 0.25 -- كولدون محسّن ومستقر لمنع اللاق
+local alternatingState = false -- لتناوب الأوضاع في نمط Alternating
 
--- التحقق مما إذا كان اللاعب داخل منطقة آمنة (Safe Zone / Non-PVP)
+-- فحص المناطق الآمنة
 local function IsInSafeZone(character)
     if not character then return true end
     
-    -- فحص خصائص حماية الـ PVP الخاصة بـ Blox Fruits
     if character:FindFirstChild("PvpDisabled") or character:FindFirstChild("SafeZone") then
         return true
     end
 
-    -- فحص المناطق الجغرافية المحمية في الخريطة
     local hrp = character:FindFirstChild("HumanoidRootPart")
     if hrp then
         local safeZones = workspace:FindFirstChild("SafeZones") or workspace:FindFirstChild("SafeZone")
@@ -68,101 +67,113 @@ local function IsInSafeZone(character)
     return false
 end
 
--- تفعيل هاكي التنبؤ (Instinct / Observation)
+-- تفعيل هاكي التنبؤ بدون تعليق (Non-blocking Thread)
 local function TriggerInstinct()
-    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-    task.wait(0.04)
-    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+    task.spawn(function()
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+        RunService.Heartbeat:Wait()
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+    end)
 end
 
--- تفعيل الانتقال السريع (Sori / Teleport Dodge)
+-- تفعيل الانتقال السريع للتفادي (Sori Teleport)
 local function TriggerSoriDodge(attackerPos)
     local char = LocalPlayer.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    -- حساب اتجاه التفادي بعيداً عن خط النار المباشر للضربة
     local avoidDirection = (hrp.Position - attackerPos).Unit
     if avoidDirection.Magnitude == 0 or avoidDirection ~= avoidDirection then
         avoidDirection = -hrp.CFrame.LookVector
     end
 
     local sideVector = hrp.CFrame.RightVector * (math.random() > 0.5 and 1 or -1)
-    local targetPos = hrp.Position + (avoidDirection * _G.Config.DodgeDistance) + (sideVector * 8)
+    local targetPos = hrp.Position + (avoidDirection * _G.Config.DodgeDistance) + (sideVector * 10)
 
     hrp.CFrame = CFrame.new(targetPos, targetPos + hrp.CFrame.LookVector)
 end
 
--- حساب ما إذا كانت الضربة "مؤكدة القادمة بمسار اللاعب"
+-- حساب التنبؤ الدقيق بالضربات القادمة
 local function IsConfirmedHit(attackerChar, myChar)
     local attackerHrp = attackerChar:FindFirstChild("HumanoidRootPart")
     local myHrp = myChar:FindFirstChild("HumanoidRootPart")
-    if not attackerHrp or not myHrp then return false end
+    if not attackerHrp or not myHrp then return false, 0 end
 
     local distance = (myHrp.Position - attackerHrp.Position).Magnitude
-    
-    -- نطاق خطر الضربات القريبة والبعيدة
-    if distance > 50 then return false end
+    if distance > 55 then return false, distance end
 
-    -- حساب زاوية الرؤية والهجوم: هل وجه الخصم موجه نحو لاعبنا مباشرة؟
     local attackerLookVector = attackerHrp.CFrame.LookVector
     local directionToMe = (myHrp.Position - attackerHrp.Position).Unit
     local dotProduct = attackerLookVector:Dot(directionToMe)
 
-    -- قيمة Dot Product > 0.75 تعني أن الخصم موجه ضربته مباشرة نحو اللاعب بزاوية دقيقة
-    if dotProduct > 0.75 then
-        return true
+    -- زاوية مواجهة دقيقة > 0.7
+    if dotProduct > 0.70 then
+        return true, distance
     end
 
-    return false
+    return false, distance
 end
 
-local function ProcessDodge(attacker, source)
+local function ProcessDodge(attacker)
     if not _G.Config.AutoDodge then return end
     if tick() - lastDodgeTime < dodgeCooldown then return end
 
     local myChar = LocalPlayer.Character
     if not myChar or IsInSafeZone(myChar) then return end
-    if IsInSafeZone(attacker) then return end -- إلغاء التفادي إذا كان المهاجم في Safe Zone
+    if IsInSafeZone(attacker) then return end
 
     local myHum = myChar:FindFirstChild("Humanoid")
     if not myHum or myHum.Health <= 0 then return end
 
-    -- تحقق استباقي: هل الضربة تتجه مباشرة نحو اللاعب؟
-    if IsConfirmedHit(attacker, myChar) then
+    local isHit, distance = IsConfirmedHit(attacker, myChar)
+    if isHit then
         lastDodgeTime = tick()
 
         local attackerHrp = attacker:FindFirstChild("HumanoidRootPart")
         local attackerPos = attackerHrp and attackerHrp.Position or myChar.HumanoidRootPart.Position
 
-        if _G.Config.DodgeMode == "Instinct Only" then
+        local mode = _G.Config.DodgeMode
+
+        if mode == "Smart Adaptive" then
+            -- إذا كان الخصم قريباً جداً، استخدم الانتقال السريع، وإلا استخدم الهاكي
+            if distance <= 15 then
+                TriggerSoriDodge(attackerPos)
+            else
+                TriggerInstinct()
+            end
+        elseif mode == "Alternating" then
+            -- تبديل الأسلوب بين كل ضربة وأخرى
+            alternatingState = not alternatingState
+            if alternatingState then
+                TriggerInstinct()
+            else
+                TriggerSoriDodge(attackerPos)
+            end
+        elseif mode == "Instinct Only" then
             TriggerInstinct()
-        elseif _G.Config.DodgeMode == "Sori Only" then
-            TriggerSoriDodge(attackerPos)
-        elseif _G.Config.DodgeMode == "Instinct + Sori" then
-            TriggerInstinct()
+        elseif mode == "Sori Only" then
             TriggerSoriDodge(attackerPos)
         end
     end
 end
 
--- ربط كاشف الضربات للعبين والبوتات
+-- ربط كاشف الضربات باللاعبين والبوتات
 local function HookAttacker(character)
     if not character or character == LocalPlayer.Character then return end
     
     local hum = character:WaitForChild("Humanoid", 3)
     if not hum then return end
 
-    hum.AnimationPlayed:Connect(function(animTrack)
+    hum.AnimationPlayed:Connect(function()
         if _G.Config.AutoDodge then
-            ProcessDodge(character, animTrack)
+            ProcessDodge(character)
         end
     end)
 
     character.ChildAdded:Connect(function(child)
         if child:IsA("Tool") and _G.Config.AutoDodge then
-            ProcessDodge(character, child)
+            ProcessDodge(character)
         end
     end)
 end
@@ -627,7 +638,7 @@ local function AddDropdown(parentPage, title, optionsList, configVar)
     Corner.Parent = Frame
 
     local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(0.5, 0, 1, 0)
+    Label.Size = UDim2.new(0.45, 0, 1, 0)
     Label.Text = "  " .. title
     Label.TextColor3 = Color3.fromRGB(200, 200, 200)
     Label.Font = Enum.Font.GothamMedium
@@ -637,8 +648,8 @@ local function AddDropdown(parentPage, title, optionsList, configVar)
     Label.Parent = Frame
 
     local DropBtn = Instance.new("TextButton")
-    DropBtn.Size = UDim2.new(0.45, 0, 0.7, 0)
-    DropBtn.Position = UDim2.new(0.52, 0, 0.15, 0)
+    DropBtn.Size = UDim2.new(0.50, 0, 0.7, 0)
+    DropBtn.Position = UDim2.new(0.47, 0, 0.15, 0)
     DropBtn.BackgroundColor3 = Color3.fromRGB(35, 45, 68)
     DropBtn.Text = tostring(_G.Config[configVar])
     DropBtn.TextColor3 = Color3.fromRGB(0, 180, 255)
@@ -647,6 +658,10 @@ local function AddDropdown(parentPage, title, optionsList, configVar)
     DropBtn.Parent = Frame
 
     local idx = 1
+    for i, opt in ipairs(optionsList) do
+        if opt == _G.Config[configVar] then idx = i break end
+    end
+
     DropBtn.MouseButton1Click:Connect(function()
         idx = (idx % #optionsList) + 1
         _G.Config[configVar] = optionsList[idx]
@@ -772,7 +787,7 @@ AddListManager(CombatTab, "🎯 Target List", _G.Config.TargetList)
 
 -- Dodge Options
 AddToggle(DodgeTab, "Enable Auto Dodge", "AutoDodge")
-AddDropdown(DodgeTab, "Dodge Mode", {"Instinct + Sori", "Instinct Only", "Sori Only"}, "DodgeMode")
+AddDropdown(DodgeTab, "Dodge Mode", {"Smart Adaptive", "Alternating", "Instinct Only", "Sori Only"}, "DodgeMode")
 
 -- Visual Options
 AddToggle(VisualsTab, "Show Health Overlay", "ShowHealth")
