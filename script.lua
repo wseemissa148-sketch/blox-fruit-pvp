@@ -17,7 +17,11 @@ _G.Config = {
     MobAimbotKey = "H",
     
     TargetPart = "Head",
-    HitboxSize = 18,
+    HitboxSize = 14, -- تم تقليل الحجم قليلاً لمنع كشف الـ Suspicious Kill
+
+    -- إعدادات الباونتي والـ Legit Mode
+    BountySafeMode = true, -- تفعيل وضع كسب الباونتي الآمن
+    AutoResetHitboxOnLowHP = true, -- تصغير الـ Hitbox عندما يقترب اللاعب من الموت لضمان كسب الباونتي
 
     ShowHealth = true,
     HealthStyle = "Modern Card",
@@ -29,6 +33,7 @@ _G.Config = {
 }
 
 local currentTargetPart = nil
+local originalSizes = {}
 
 -- ==========================================
 -- 2. HEALTH OVERLAY ENGINE
@@ -175,7 +180,7 @@ end
 task.spawn(HookEnemies)
 
 -- ==========================================
--- 3. HARD LOCK-ON AIMBOT ENGINE
+-- 3. HARD LOCK & BOUNTY SAFE AIMBOT ENGINE
 -- ==========================================
 
 local function IsWhitelisted(name)
@@ -250,16 +255,30 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end)
 end)
 
--- تثبيت الكاميرا المباشر وتكبير الـ Hitbox
+-- تثبيت الكاميرا وتعديل الـ Hitbox بأسلوب يضمن كسب الباونتي
 RunService.RenderStepped:Connect(function()
     if currentTargetPart and currentTargetPart.Parent and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
         pcall(function()
-            -- تثبيت الكاميرا مباشرة على الهدف (Hard Lock)
+            local targetHum = currentTargetPart.Parent:FindFirstChild("Humanoid")
+            local isLowHP = targetHum and (targetHum.Health / targetHum.MaxHealth) < 0.25
+
+            -- تثبيت الكاميرا
             Camera.CFrame = CFrame.new(Camera.CFrame.Position, currentTargetPart.Position)
 
-            -- تكبير الـ Hitbox
-            currentTargetPart.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
-            currentTargetPart.Transparency = 0.7
+            -- حفظ الحجم الأصلي للـ Part للعودة إليه
+            if not originalSizes[currentTargetPart] then
+                originalSizes[currentTargetPart] = currentTargetPart.Size
+            end
+
+            -- إذا كان مفعل وضع الباونتي الآمن، والصحة منخفضة، يعود الـ Hitbox للحجم الطبيعي لمنع رسالة Suspicious Kill
+            if _G.Config.BountySafeMode and _G.Config.AutoResetHitboxOnLowHP and isLowHP then
+                currentTargetPart.Size = originalSizes[currentTargetPart] or Vector3.new(2, 2, 1)
+                currentTargetPart.Transparency = 0
+            else
+                currentTargetPart.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
+                currentTargetPart.Transparency = 0.6
+            end
+            
             currentTargetPart.CanCollide = false
         end)
     end
@@ -278,7 +297,7 @@ ScreenGui.Name = "BloxFruitsUltraHubUI"
 ScreenGui.Parent = CoreGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 510, 0, 360)
+MainFrame.Size = UDim2.new(0, 510, 0, 370)
 MainFrame.Position = UDim2.new(0.5, -255, 0.25, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(13, 16, 24)
 MainFrame.BorderSizePixel = 0
@@ -618,11 +637,15 @@ local VisualsTab = CreateTab("👁️ Health & UI")
 tabs[1].Page.Visible = true
 tabs[1].Btn.TextColor3 = Color3.fromRGB(0, 180, 255)
 
--- Combat Options
+-- Combat & Bounty Options
 AddToggle(CombatTab, "Player Skill Aimbot", "PlayerAimbot")
 AddKeybindPicker(CombatTab, "Player Aimbot Key", "PlayerAimbotKey")
 AddToggle(CombatTab, "Mob Skill Aimbot", "MobAimbot")
 AddKeybindPicker(CombatTab, "Mob Aimbot Key", "MobAimbotKey")
+
+-- خيارات حماية كسب الباونتي الجديدة
+AddToggle(CombatTab, "Bounty Safe-Mode (Anti-Suspicious)", "BountySafeMode")
+AddToggle(CombatTab, "Reset Hitbox on Low HP (Get Bounty)", "AutoResetHitboxOnLowHP")
 
 AddListManager(CombatTab, "🛡️ Whitelist", _G.Config.Whitelist)
 AddListManager(CombatTab, "🎯 Target List", _G.Config.TargetList)
