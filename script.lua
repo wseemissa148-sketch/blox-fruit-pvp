@@ -16,11 +16,11 @@ _G.Config = {
     MobAimbot = false,
     MobAimbotKey = "H",
     
-    AimbotSmoothness = 0.25, -- مدى smoothness الحركة (كلما قل الرقم كان أسرع، 0.25 متوازن وسلس جداً)
-    TargetPart = "Head", -- يستهدف الرأس لزيادة الدقة
+    TargetPart = "Head", -- يستهدف الرأس لتوجيه المهارات بدقة
+    HitboxSize = 15, -- تكبير حجم منطقة الإصابة للخصم لضمان عدم ضياع الضربات
     
     ShowHealth = true,
-    HealthStyle = "Modern Card", -- "Modern Card", "Classic Bar", "Text Only"
+    HealthStyle = "Modern Card",
     PlayerHealthColor = {R = 0, G = 255, B = 150},
     MobHealthColor = {R = 255, G = 50, B = 50},
 
@@ -173,7 +173,7 @@ end
 task.spawn(HookEnemies)
 
 -- ==========================================
--- 3. SMOOTH & POWERFUL AIMBOT ENGINE
+-- 3. DIRECT & POWERFUL LOCK-ON ENGINE
 -- ==========================================
 
 local function IsWhitelisted(name)
@@ -235,7 +235,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end)
 end)
 
--- محرك التوجيه السلس بـ Lerp لتفادي التعليق وتقطيع الشاشة
+-- قفل مباشر بدون تأخير + توسيع منطقة الإصابة لضمان التثبيت الكامل
 RunService.RenderStepped:Connect(function()
     local targetPart = nil
     if _G.Config.PlayerAimbot then
@@ -245,19 +245,15 @@ RunService.RenderStepped:Connect(function()
     end
 
     if targetPart and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool") then
-        local targetPos = targetPart.Position
-        
-        -- إضافة Prediction (توقع السرعة للحركة السريعة)
-        if targetPart.Parent:FindFirstChild("HumanoidRootPart") then
-            local velocity = targetPart.Parent.HumanoidRootPart.AssemblyLinearVelocity
-            targetPos = targetPos + (velocity * 0.035)
-        end
+        -- قفل مباشر للرؤية نحو الخصم
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPart.Position)
 
-        local currentCFrame = Camera.CFrame
-        local targetCFrame = CFrame.new(currentCFrame.Position, targetPos)
-        
-        -- السلاسة المطلقة بدون تعليق
-        Camera.CFrame = currentCFrame:Lerp(targetCFrame, _G.Config.AimbotSmoothness)
+        -- توسيع وتثبيت جزء الخصم المستهدف لضمان وصول الضربات حتى عند الركض والقفز
+        pcall(function()
+            targetPart.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
+            targetPart.Transparency = 0.7
+            targetPart.CanCollide = false
+        end)
     end
 end)
 
@@ -466,7 +462,7 @@ local function AddKeybindPicker(parentPage, name, configVar)
 end
 
 -- ==========================================
--- 5. IMPROVED LIST MANAGER (ADD & REMOVE FIXED)
+-- 5. LIST MANAGER (CASE-INSENSITIVE)
 -- ==========================================
 
 local function AddListManager(parentPage, title, listTable)
@@ -536,9 +532,8 @@ local function AddListManager(parentPage, title, listTable)
     StatusLabel.BackgroundTransparency = 1
     StatusLabel.Parent = Frame
 
-    -- الإضافة (Add)
     AddBtn.MouseButton1Click:Connect(function()
-        local name = TextBox.Text:match("^%s*(.-)%s*$") -- إزالة المسافات الزائدة
+        local name = TextBox.Text:match("^%s*(.-)%s*$")
         if name ~= "" then
             local exists = false
             for _, v in ipairs(listTable) do
@@ -552,7 +547,6 @@ local function AddListManager(parentPage, title, listTable)
         end
     end)
 
-    -- الإزالة (Remove) - معدلة بالكامل لتجاهل أحرف الكابيتال والسمول
     RemoveBtn.MouseButton1Click:Connect(function()
         local name = TextBox.Text:match("^%s*(.-)%s*$")
         if name ~= "" then
