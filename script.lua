@@ -2,7 +2,6 @@ local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -20,12 +19,6 @@ _G.Config = {
     TargetPart = "Head",
     HitboxSize = 18,
 
-    -- Anti-Escape / Auto Pull Settings
-    AutoPull = true,
-    PullDistance = 35, -- المسافة التي يتم تفعيل السحب عندها
-    PullKey = "C", -- زر مهارة السحب (يمكنك تغييره من الواجهة)
-    PullCooldown = 3, -- التبريد بالثواني لمنع التكرار المفرط
-
     ShowHealth = true,
     HealthStyle = "Modern Card",
     PlayerHealthColor = {R = 0, G = 255, B = 150},
@@ -35,7 +28,6 @@ _G.Config = {
     TargetList = {}
 }
 
-local lastPullTime = 0
 local currentTargetPart = nil
 
 -- ==========================================
@@ -183,7 +175,7 @@ end
 task.spawn(HookEnemies)
 
 -- ==========================================
--- 3. HARD LOCK-ON & AUTO PULL ENGINE
+-- 3. HARD LOCK-ON AIMBOT ENGINE
 -- ==========================================
 
 local function IsWhitelisted(name)
@@ -234,7 +226,7 @@ local function GetClosestTarget(isPlayerTarget)
     return closest
 end
 
--- اختيار الهدف بدقة وسرعة
+-- اختيار الهدف بدقة
 task.spawn(function()
     while task.wait(0.03) do
         if _G.Config.PlayerAimbot then
@@ -247,16 +239,6 @@ task.spawn(function()
     end
 end)
 
--- تفعيل المهارة تلقائياً عند السحب
-local function TriggerPullSkill()
-    local keyCode = Enum.KeyCode[_G.Config.PullKey]
-    if keyCode then
-        VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
-        task.wait(0.05)
-        VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
-    end
-end
-
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     pcall(function()
@@ -268,28 +250,17 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end)
 end)
 
--- تثبيت الكاميرا المباشر وتتبع المسافة
+-- تثبيت الكاميرا المباشر وتكبير الـ Hitbox
 RunService.RenderStepped:Connect(function()
     if currentTargetPart and currentTargetPart.Parent and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
         pcall(function()
-            -- تثبيت الكاميرا مباشرة وبدون أي تأخير (Hard Lock)
+            -- تثبيت الكاميرا مباشرة على الهدف (Hard Lock)
             Camera.CFrame = CFrame.new(Camera.CFrame.Position, currentTargetPart.Position)
 
-            -- تكبير الـ Hitbox للهدف
+            -- تكبير الـ Hitbox
             currentTargetPart.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
             currentTargetPart.Transparency = 0.7
             currentTargetPart.CanCollide = false
-
-            -- فحص خاصية السحب التلقائي لمنع الهروب
-            if _G.Config.AutoPull then
-                local myPos = LocalPlayer.Character.HumanoidRootPart.Position
-                local dist = (myPos - currentTargetPart.Position).Magnitude
-
-                if dist >= _G.Config.PullDistance and (tick() - lastPullTime) >= _G.Config.PullCooldown then
-                    lastPullTime = tick()
-                    task.spawn(TriggerPullSkill)
-                end
-            end
         end)
     end
 end)
@@ -307,7 +278,7 @@ ScreenGui.Name = "BloxFruitsUltraHubUI"
 ScreenGui.Parent = CoreGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 510, 0, 370)
+MainFrame.Size = UDim2.new(0, 510, 0, 360)
 MainFrame.Position = UDim2.new(0.5, -255, 0.25, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(13, 16, 24)
 MainFrame.BorderSizePixel = 0
@@ -652,10 +623,6 @@ AddToggle(CombatTab, "Player Skill Aimbot", "PlayerAimbot")
 AddKeybindPicker(CombatTab, "Player Aimbot Key", "PlayerAimbotKey")
 AddToggle(CombatTab, "Mob Skill Aimbot", "MobAimbot")
 AddKeybindPicker(CombatTab, "Mob Aimbot Key", "MobAimbotKey")
-
--- Anti Escape Options
-AddToggle(CombatTab, "Auto Pull (Anti-Escape)", "AutoPull")
-AddKeybindPicker(CombatTab, "Pull Skill Key", "PullKey")
 
 AddListManager(CombatTab, "🛡️ Whitelist", _G.Config.Whitelist)
 AddListManager(CombatTab, "🎯 Target List", _G.Config.TargetList)
