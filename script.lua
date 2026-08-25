@@ -2,7 +2,6 @@ local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -17,10 +16,6 @@ _G.Config = {
     MobAimbot = false,
     MobAimbotKey = "H",
     
-    AutoDodge = true,
-    DodgeMode = "Smart Adaptive", -- Options: "Smart Adaptive", "Alternating", "Instinct Only", "Sori Only"
-    DodgeDistance = 25,
-    
     TargetPart = "Head",
     HitboxSize = 15,
     
@@ -34,171 +29,7 @@ _G.Config = {
 }
 
 -- ==========================================
--- 2. HIGH-PERFORMANCE DODGE ENGINE (SMOOTH & ZERO LAG)
--- ==========================================
-
-local lastDodgeTime = 0
-local dodgeCooldown = 0.25 -- كولدون محسّن ومستقر لمنع اللاق
-local alternatingState = false -- لتناوب الأوضاع في نمط Alternating
-
--- فحص المناطق الآمنة
-local function IsInSafeZone(character)
-    if not character then return true end
-    
-    if character:FindFirstChild("PvpDisabled") or character:FindFirstChild("SafeZone") then
-        return true
-    end
-
-    local hrp = character:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        local safeZones = workspace:FindFirstChild("SafeZones") or workspace:FindFirstChild("SafeZone")
-        if safeZones then
-            for _, zone in pairs(safeZones:GetChildren()) do
-                if zone:IsA("BasePart") then
-                    local dist = (hrp.Position - zone.Position).Magnitude
-                    if dist <= (zone.Size.X / 2) then
-                        return true
-                    end
-                end
-            end
-        end
-    end
-
-    return false
-end
-
--- تفعيل هاكي التنبؤ بدون تعليق (Non-blocking Thread)
-local function TriggerInstinct()
-    task.spawn(function()
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-        RunService.Heartbeat:Wait()
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-    end)
-end
-
--- تفعيل الانتقال السريع للتفادي (Sori Teleport)
-local function TriggerSoriDodge(attackerPos)
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-
-    local avoidDirection = (hrp.Position - attackerPos).Unit
-    if avoidDirection.Magnitude == 0 or avoidDirection ~= avoidDirection then
-        avoidDirection = -hrp.CFrame.LookVector
-    end
-
-    local sideVector = hrp.CFrame.RightVector * (math.random() > 0.5 and 1 or -1)
-    local targetPos = hrp.Position + (avoidDirection * _G.Config.DodgeDistance) + (sideVector * 10)
-
-    hrp.CFrame = CFrame.new(targetPos, targetPos + hrp.CFrame.LookVector)
-end
-
--- حساب التنبؤ الدقيق بالضربات القادمة
-local function IsConfirmedHit(attackerChar, myChar)
-    local attackerHrp = attackerChar:FindFirstChild("HumanoidRootPart")
-    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
-    if not attackerHrp or not myHrp then return false, 0 end
-
-    local distance = (myHrp.Position - attackerHrp.Position).Magnitude
-    if distance > 55 then return false, distance end
-
-    local attackerLookVector = attackerHrp.CFrame.LookVector
-    local directionToMe = (myHrp.Position - attackerHrp.Position).Unit
-    local dotProduct = attackerLookVector:Dot(directionToMe)
-
-    -- زاوية مواجهة دقيقة > 0.7
-    if dotProduct > 0.70 then
-        return true, distance
-    end
-
-    return false, distance
-end
-
-local function ProcessDodge(attacker)
-    if not _G.Config.AutoDodge then return end
-    if tick() - lastDodgeTime < dodgeCooldown then return end
-
-    local myChar = LocalPlayer.Character
-    if not myChar or IsInSafeZone(myChar) then return end
-    if IsInSafeZone(attacker) then return end
-
-    local myHum = myChar:FindFirstChild("Humanoid")
-    if not myHum or myHum.Health <= 0 then return end
-
-    local isHit, distance = IsConfirmedHit(attacker, myChar)
-    if isHit then
-        lastDodgeTime = tick()
-
-        local attackerHrp = attacker:FindFirstChild("HumanoidRootPart")
-        local attackerPos = attackerHrp and attackerHrp.Position or myChar.HumanoidRootPart.Position
-
-        local mode = _G.Config.DodgeMode
-
-        if mode == "Smart Adaptive" then
-            -- إذا كان الخصم قريباً جداً، استخدم الانتقال السريع، وإلا استخدم الهاكي
-            if distance <= 15 then
-                TriggerSoriDodge(attackerPos)
-            else
-                TriggerInstinct()
-            end
-        elseif mode == "Alternating" then
-            -- تبديل الأسلوب بين كل ضربة وأخرى
-            alternatingState = not alternatingState
-            if alternatingState then
-                TriggerInstinct()
-            else
-                TriggerSoriDodge(attackerPos)
-            end
-        elseif mode == "Instinct Only" then
-            TriggerInstinct()
-        elseif mode == "Sori Only" then
-            TriggerSoriDodge(attackerPos)
-        end
-    end
-end
-
--- ربط كاشف الضربات باللاعبين والبوتات
-local function HookAttacker(character)
-    if not character or character == LocalPlayer.Character then return end
-    
-    local hum = character:WaitForChild("Humanoid", 3)
-    if not hum then return end
-
-    hum.AnimationPlayed:Connect(function()
-        if _G.Config.AutoDodge then
-            ProcessDodge(character)
-        end
-    end)
-
-    character.ChildAdded:Connect(function(child)
-        if child:IsA("Tool") and _G.Config.AutoDodge then
-            ProcessDodge(character)
-        end
-    end)
-end
-
-for _, p in pairs(Players:GetPlayers()) do
-    if p ~= LocalPlayer then
-        if p.Character then HookAttacker(p.Character) end
-        p.CharacterAdded:Connect(HookAttacker)
-    end
-end
-Players.PlayerAdded:Connect(function(p)
-    p.CharacterAdded:Connect(HookAttacker)
-end)
-
-local function HookMobEnemies()
-    local enemies = workspace:FindFirstChild("Enemies")
-    if enemies then
-        for _, mob in pairs(enemies:GetChildren()) do HookAttacker(mob) end
-        enemies.ChildAdded:Connect(HookAttacker)
-    end
-end
-task.spawn(HookMobEnemies)
-
--- ==========================================
--- 3. HEALTH OVERLAY ENGINE
+-- 2. HEALTH OVERLAY ENGINE
 -- ==========================================
 
 local function RemoveHealthUI(character)
@@ -342,7 +173,7 @@ end
 task.spawn(HookEnemies)
 
 -- ==========================================
--- 4. DIRECT & POWERFUL LOCK-ON ENGINE
+-- 3. DIRECT & POWERFUL LOCK-ON ENGINE
 -- ==========================================
 
 local function IsWhitelisted(name)
@@ -424,7 +255,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ==========================================
--- 5. USER INTERFACE (GUI)
+-- 4. USER INTERFACE (GUI)
 -- ==========================================
 
 if CoreGui:FindFirstChild("BloxFruitsUltraHubUI") then
@@ -771,7 +602,6 @@ end
 -- ==========================================
 
 local CombatTab = CreateTab("⚔️ Combat & Aimbot")
-local DodgeTab = CreateTab("🛡️ Auto Dodge")
 local VisualsTab = CreateTab("👁️ Health & UI")
 
 tabs[1].Page.Visible = true
@@ -784,10 +614,6 @@ AddToggle(CombatTab, "Mob Skill Aimbot", "MobAimbot")
 AddKeybindPicker(CombatTab, "Mob Aimbot Key", "MobAimbotKey")
 AddListManager(CombatTab, "🛡️ Whitelist", _G.Config.Whitelist)
 AddListManager(CombatTab, "🎯 Target List", _G.Config.TargetList)
-
--- Dodge Options
-AddToggle(DodgeTab, "Enable Auto Dodge", "AutoDodge")
-AddDropdown(DodgeTab, "Dodge Mode", {"Smart Adaptive", "Alternating", "Instinct Only", "Sori Only"}, "DodgeMode")
 
 -- Visual Options
 AddToggle(VisualsTab, "Show Health Overlay", "ShowHealth")
