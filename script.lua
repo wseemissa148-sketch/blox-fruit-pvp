@@ -18,7 +18,9 @@ _G.Config = {
     
     TargetPart = "Head",
     HitboxSize = 15,
-    
+    AimSmoothness = 0.25, -- مدى سلاسة الكاميرا (كلما قل الرقم زادت السلاسة)
+    PredictionAmount = 0.135, -- معامل توقع حركة الهدف للمهارات
+
     ShowHealth = true,
     HealthStyle = "Modern Card",
     PlayerHealthColor = {R = 0, G = 255, B = 150},
@@ -173,8 +175,10 @@ end
 task.spawn(HookEnemies)
 
 -- ==========================================
--- 3. DIRECT & POWERFUL LOCK-ON ENGINE
+-- 3. ENHANCED LOCK-ON ENGINE (SMOOTH & PREDICTIVE)
 -- ==========================================
+
+local currentTarget = nil
 
 local function IsWhitelisted(name)
     for _, v in ipairs(_G.Config.Whitelist) do
@@ -224,6 +228,19 @@ local function GetClosestTarget(isPlayerTarget)
     return closest
 end
 
+-- اختيار الهدف بطريقة خفيفة على المعالج
+task.spawn(function()
+    while task.wait(0.05) do
+        if _G.Config.PlayerAimbot then
+            currentTarget = GetClosestTarget(true)
+        elseif _G.Config.MobAimbot then
+            currentTarget = GetClosestTarget(false)
+        else
+            currentTarget = nil
+        end
+    end
+end)
+
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     pcall(function()
@@ -236,26 +253,26 @@ UserInputService.InputBegan:Connect(function(input, processed)
 end)
 
 RunService.RenderStepped:Connect(function()
-    local targetPart = nil
-    if _G.Config.PlayerAimbot then
-        targetPart = GetClosestTarget(true)
-    elseif _G.Config.MobAimbot then
-        targetPart = GetClosestTarget(false)
-    end
-
-    if targetPart and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool") then
-        Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPart.Position)
-
+    if currentTarget and currentTarget.Parent and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool") then
         pcall(function()
-            targetPart.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
-            targetPart.Transparency = 0.7
-            targetPart.CanCollide = false
+            -- التوقع السلس لمكان الهدف
+            local velocity = currentTarget.AssemblyLinearVelocity or Vector3.new(0,0,0)
+            local predictedPos = currentTarget.Position + (velocity * _G.Config.PredictionAmount)
+
+            -- حركة كاميرا ناعمة وسلسة بدلاً من القفز المفاجئ
+            local targetCFrame = CFrame.new(Camera.CFrame.Position, predictedPos)
+            Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, _G.Config.AimSmoothness)
+
+            -- تكبير الـ Hitbox مع تفادي الاصطدام
+            currentTarget.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
+            currentTarget.Transparency = 0.7
+            currentTarget.CanCollide = false
         end)
     end
 end)
 
 -- ==========================================
--- 4. USER INTERFACE (GUI)
+-- 4. USER INTERFACE (GUI - NO DODGE)
 -- ==========================================
 
 if CoreGui:FindFirstChild("BloxFruitsUltraHubUI") then
