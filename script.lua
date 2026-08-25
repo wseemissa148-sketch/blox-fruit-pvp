@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -17,9 +18,13 @@ _G.Config = {
     MobAimbotKey = "H",
     
     TargetPart = "Head",
-    HitboxSize = 15,
-    AimSmoothness = 0.25, -- مدى سلاسة الكاميرا (كلما قل الرقم زادت السلاسة)
-    PredictionAmount = 0.135, -- معامل توقع حركة الهدف للمهارات
+    HitboxSize = 18,
+
+    -- Anti-Escape / Auto Pull Settings
+    AutoPull = true,
+    PullDistance = 35, -- المسافة التي يتم تفعيل السحب عندها
+    PullKey = "C", -- زر مهارة السحب (يمكنك تغييره من الواجهة)
+    PullCooldown = 3, -- التبريد بالثواني لمنع التكرار المفرط
 
     ShowHealth = true,
     HealthStyle = "Modern Card",
@@ -29,6 +34,9 @@ _G.Config = {
     Whitelist = {},
     TargetList = {}
 }
+
+local lastPullTime = 0
+local currentTargetPart = nil
 
 -- ==========================================
 -- 2. HEALTH OVERLAY ENGINE
@@ -175,10 +183,8 @@ end
 task.spawn(HookEnemies)
 
 -- ==========================================
--- 3. ENHANCED LOCK-ON ENGINE (SMOOTH & PREDICTIVE)
+-- 3. HARD LOCK-ON & AUTO PULL ENGINE
 -- ==========================================
-
-local currentTarget = nil
 
 local function IsWhitelisted(name)
     for _, v in ipairs(_G.Config.Whitelist) do
@@ -228,18 +234,28 @@ local function GetClosestTarget(isPlayerTarget)
     return closest
 end
 
--- اختيار الهدف بطريقة خفيفة على المعالج
+-- اختيار الهدف بدقة وسرعة
 task.spawn(function()
-    while task.wait(0.05) do
+    while task.wait(0.03) do
         if _G.Config.PlayerAimbot then
-            currentTarget = GetClosestTarget(true)
+            currentTargetPart = GetClosestTarget(true)
         elseif _G.Config.MobAimbot then
-            currentTarget = GetClosestTarget(false)
+            currentTargetPart = GetClosestTarget(false)
         else
-            currentTarget = nil
+            currentTargetPart = nil
         end
     end
 end)
+
+-- تفعيل المهارة تلقائياً عند السحب
+local function TriggerPullSkill()
+    local keyCode = Enum.KeyCode[_G.Config.PullKey]
+    if keyCode then
+        VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+        task.wait(0.05)
+        VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+    end
+end
 
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
@@ -252,27 +268,34 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end)
 end)
 
+-- تثبيت الكاميرا المباشر وتتبع المسافة
 RunService.RenderStepped:Connect(function()
-    if currentTarget and currentTarget.Parent and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool") then
+    if currentTargetPart and currentTargetPart.Parent and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
         pcall(function()
-            -- التوقع السلس لمكان الهدف
-            local velocity = currentTarget.AssemblyLinearVelocity or Vector3.new(0,0,0)
-            local predictedPos = currentTarget.Position + (velocity * _G.Config.PredictionAmount)
+            -- تثبيت الكاميرا مباشرة وبدون أي تأخير (Hard Lock)
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, currentTargetPart.Position)
 
-            -- حركة كاميرا ناعمة وسلسة بدلاً من القفز المفاجئ
-            local targetCFrame = CFrame.new(Camera.CFrame.Position, predictedPos)
-            Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, _G.Config.AimSmoothness)
+            -- تكبير الـ Hitbox للهدف
+            currentTargetPart.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
+            currentTargetPart.Transparency = 0.7
+            currentTargetPart.CanCollide = false
 
-            -- تكبير الـ Hitbox مع تفادي الاصطدام
-            currentTarget.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
-            currentTarget.Transparency = 0.7
-            currentTarget.CanCollide = false
+            -- فحص خاصية السحب التلقائي لمنع الهروب
+            if _G.Config.AutoPull then
+                local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+                local dist = (myPos - currentTargetPart.Position).Magnitude
+
+                if dist >= _G.Config.PullDistance and (tick() - lastPullTime) >= _G.Config.PullCooldown then
+                    lastPullTime = tick()
+                    task.spawn(TriggerPullSkill)
+                end
+            end
         end)
     end
 end)
 
 -- ==========================================
--- 4. USER INTERFACE (GUI - NO DODGE)
+-- 4. USER INTERFACE (GUI)
 -- ==========================================
 
 if CoreGui:FindFirstChild("BloxFruitsUltraHubUI") then
@@ -284,7 +307,7 @@ ScreenGui.Name = "BloxFruitsUltraHubUI"
 ScreenGui.Parent = CoreGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 510, 0, 360)
+MainFrame.Size = UDim2.new(0, 510, 0, 370)
 MainFrame.Position = UDim2.new(0.5, -255, 0.25, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(13, 16, 24)
 MainFrame.BorderSizePixel = 0
@@ -629,6 +652,11 @@ AddToggle(CombatTab, "Player Skill Aimbot", "PlayerAimbot")
 AddKeybindPicker(CombatTab, "Player Aimbot Key", "PlayerAimbotKey")
 AddToggle(CombatTab, "Mob Skill Aimbot", "MobAimbot")
 AddKeybindPicker(CombatTab, "Mob Aimbot Key", "MobAimbotKey")
+
+-- Anti Escape Options
+AddToggle(CombatTab, "Auto Pull (Anti-Escape)", "AutoPull")
+AddKeybindPicker(CombatTab, "Pull Skill Key", "PullKey")
+
 AddListManager(CombatTab, "🛡️ Whitelist", _G.Config.Whitelist)
 AddListManager(CombatTab, "🎯 Target List", _G.Config.TargetList)
 
