@@ -11,35 +11,34 @@ local Camera = workspace.CurrentCamera
 -- ==========================================
 
 _G.Config = {
-    -- 1. Normal Aimbot (الأيم بوت العادي)
+    -- Aimbot Modes
     NormalAimbot = false,
     NormalAimbotKey = "E",
 
-    -- 2. Target Lock (التثبيت اليدوي على هدف محدد)
     TargetLock = false,
     TargetLockKey = "G",
 
-    -- Aimbot Settings
-    Smoothness = 0.25, -- مدى سلاسة الحركة (0.1 سريع جداً إلى 0.5 سلس وجذاب)
+    -- Settings
+    Smoothness = 0.35,
     TargetPart = "Head",
-    HitboxSize = 14,
+    HitboxSize = 15,
 
-    -- UI Settings
+    -- Visuals & Colors
     ShowHealth = true,
     HealthStyle = "Modern Card",
     PlayerHealthColor = {R = 0, G = 255, B = 150},
-    TargetColor = {R = 170, G = 0, B = 255},
+    TargetColor = {R = 170, G = 0, B = 255}, -- اللون البنفسجي المخصص للهدف المثبت
 
     Whitelist = {},
     TargetList = {}
 }
 
-local currentLockedPart = nil
-local currentLockedChar = nil
+local lockedTargetPart = nil
+local lockedTargetChar = nil
 local originalPartProperties = {}
 
 -- ==========================================
--- 2. HEALTH OVERLAY ENGINE
+-- 2. HEALTH OVERLAY ENGINE (إعادة الألوان)
 -- ==========================================
 
 local function RemoveHealthUI(character)
@@ -114,6 +113,23 @@ local function CreateHealthUI(character)
         hum.HealthChanged:Connect(function()
             fill.Size = UDim2.new(math.clamp(hum.Health / hum.MaxHealth, 0, 1), 0, 1, 0)
         end)
+    elseif _G.Config.HealthStyle == "Classic Bar" then
+        local bg = Instance.new("Frame")
+        bg.Size = UDim2.new(1, 0, 0, 8)
+        bg.Position = UDim2.new(0, 0, 0.5, -4)
+        bg.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+        bg.BorderSizePixel = 0
+        bg.Parent = bb
+
+        local fill = Instance.new("Frame")
+        fill.Size = UDim2.new(math.clamp(hum.Health / hum.MaxHealth, 0, 1), 0, 1, 0)
+        fill.BackgroundColor3 = mainColor
+        fill.BorderSizePixel = 0
+        fill.Parent = bg
+
+        hum.HealthChanged:Connect(function()
+            fill.Size = UDim2.new(math.clamp(hum.Health / hum.MaxHealth, 0, 1), 0, 1, 0)
+        end)
     end
 
     hum.Died:Connect(function() bb:Destroy() end)
@@ -135,7 +151,7 @@ Players.PlayerAdded:Connect(function(p)
 end)
 
 -- ==========================================
--- 3. SMOOTH AIMBOT & TARGET LOCK ENGINE
+-- 3. STICKY AIMBOT & LOCK-ON ENGINE
 -- ==========================================
 
 local function IsWhitelisted(name)
@@ -146,18 +162,17 @@ local function IsWhitelisted(name)
 end
 
 local function ResetPreviousHitbox()
-    if currentLockedPart and originalPartProperties[currentLockedPart] then
+    if lockedTargetPart and originalPartProperties[lockedTargetPart] then
         pcall(function()
-            currentLockedPart.Size = originalPartProperties[currentLockedPart].Size
-            currentLockedPart.Transparency = originalPartProperties[currentLockedPart].Transparency
-            currentLockedPart.Color = originalPartProperties[currentLockedPart].Color
+            lockedTargetPart.Size = originalPartProperties[lockedTargetPart].Size
+            lockedTargetPart.Transparency = originalPartProperties[lockedTargetPart].Transparency
+            lockedTargetPart.Color = originalPartProperties[lockedTargetPart].Color
         end)
     end
-    currentLockedPart = nil
-    currentLockedChar = nil
+    lockedTargetPart = nil
+    lockedTargetChar = nil
 end
 
--- البحث عن الهدف الأقرب لمؤشر الماوس
 local function GetClosestTarget()
     local mousePos = UserInputService:GetMouseLocation()
     local closest, shortestDist = nil, math.huge
@@ -181,17 +196,29 @@ local function GetClosestTarget()
     return closest
 end
 
--- التحكم بالكبسات (Keybindings Handler)
+-- التحكم بالأزرار (Keybind Handling)
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     pcall(function()
-        -- 1. زر الأيم بوت العادي (Normal Aimbot)
+        -- 1. زر الأيم بوت (Normal Sticky Aimbot)
         if input.KeyCode == Enum.KeyCode[_G.Config.NormalAimbotKey] then
             _G.Config.NormalAimbot = not _G.Config.NormalAimbot
             _G.Config.TargetLock = false
-            ResetPreviousHitbox()
+            
+            if _G.Config.NormalAimbot then
+                local target = GetClosestTarget()
+                if target then
+                    ResetPreviousHitbox()
+                    lockedTargetPart = target.Part
+                    lockedTargetChar = target.Char
+                else
+                    _G.Config.NormalAimbot = false
+                end
+            else
+                ResetPreviousHitbox()
+            end
 
-        -- 2. زر التثبيت المباشر على هدف (Target Lock)
+        -- 2. زر التثبيت اليدوي (Target Lock)
         elseif input.KeyCode == Enum.KeyCode[_G.Config.TargetLockKey] then
             _G.Config.TargetLock = not _G.Config.TargetLock
             _G.Config.NormalAimbot = false
@@ -200,12 +227,12 @@ UserInputService.InputBegan:Connect(function(input, processed)
                 local target = GetClosestTarget()
                 if target then
                     ResetPreviousHitbox()
-                    currentLockedPart = target.Part
-                    currentLockedChar = target.Char
-                    originalPartProperties[currentLockedPart] = {
-                        Size = currentLockedPart.Size,
-                        Transparency = currentLockedPart.Transparency,
-                        Color = currentLockedPart.Color
+                    lockedTargetPart = target.Part
+                    lockedTargetChar = target.Char
+                    originalPartProperties[lockedTargetPart] = {
+                        Size = lockedTargetPart.Size,
+                        Transparency = lockedTargetPart.Transparency,
+                        Color = lockedTargetPart.Color
                     }
                 else
                     _G.Config.TargetLock = false
@@ -217,46 +244,36 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end)
 end)
 
--- الحلقة المباشرة لتحريك الكاميرا بسلاسة (RenderStepped Loop)
+-- حلقة التثبيت المستمر وتكبير الـ Hitbox
 RunService.RenderStepped:Connect(function()
-    local targetToAim = nil
-
-    -- وضع الأيم بوت العادي
-    if _G.Config.NormalAimbot then
-        local found = GetClosestTarget()
-        if found then targetToAim = found.Part end
-
-    -- وضع تثبيت الهدف (Target Lock)
-    elseif _G.Config.TargetLock and currentLockedPart and currentLockedChar then
-        local hum = currentLockedChar:FindFirstChild("Humanoid")
+    if (_G.Config.NormalAimbot or _G.Config.TargetLock) and lockedTargetPart and lockedTargetChar then
+        local hum = lockedTargetChar:FindFirstChild("Humanoid")
         if hum and hum.Health > 0 then
-            targetToAim = currentLockedPart
-
-            -- تكبير وتلوين الـ Hitbox للهدف المثبت
             pcall(function()
-                local tc = _G.Config.TargetColor
-                currentLockedPart.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
-                currentLockedPart.Color = Color3.fromRGB(tc.R, tc.G, tc.B)
-                currentLockedPart.Transparency = 0.5
-                currentLockedPart.CanCollide = false
+                -- توجيه الكاميرا بسلاسة
+                local targetCFrame = CFrame.new(Camera.CFrame.Position, lockedTargetPart.Position)
+                Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, _G.Config.Smoothness)
+
+                -- تكبير الـ Hitbox وتغيير لونه (في وضع Target Lock)
+                if _G.Config.TargetLock then
+                    local tc = _G.Config.TargetColor
+                    lockedTargetPart.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
+                    lockedTargetPart.Color = Color3.fromRGB(tc.R, tc.G, tc.B)
+                    lockedTargetPart.Transparency = 0.5
+                    lockedTargetPart.CanCollide = false
+                end
             end)
         else
+            -- إلغاء التثبيت فور موت اللاعب
+            _G.Config.NormalAimbot = false
             _G.Config.TargetLock = false
             ResetPreviousHitbox()
         end
     end
-
-    -- توجيه الكاميرا بسلاسة فائقة إذا وجد هدف
-    if targetToAim then
-        pcall(function()
-            local targetCFrame = CFrame.new(Camera.CFrame.Position, targetToAim.Position)
-            Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, _G.Config.Smoothness)
-        end)
-    end
 end)
 
 -- ==========================================
--- 4. USER INTERFACE (GUI WITH PVP ICON)
+-- 4. USER INTERFACE (PVP GUI)
 -- ==========================================
 
 if CoreGui:FindFirstChild("PvpUltraHubUI") then
@@ -268,7 +285,7 @@ ScreenGui.Name = "PvpUltraHubUI"
 ScreenGui.Parent = CoreGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 510, 0, 360)
+MainFrame.Size = UDim2.new(0, 510, 0, 370)
 MainFrame.Position = UDim2.new(0.5, -255, 0.25, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(13, 16, 24)
 MainFrame.BorderSizePixel = 0
@@ -456,23 +473,74 @@ local function AddKeybindPicker(parentPage, name, configVar)
     end)
 end
 
+local function AddColorPicker(parentPage, title, configVar)
+    local colors = {
+        ["Purple 💜"] = {R = 170, G = 0, B = 255},
+        ["Cyan 🩵"]   = {R = 0, G = 225, B = 255},
+        ["Red 🔴"]    = {R = 255, G = 40, B = 40},
+        ["Green 🟢"]  = {R = 0, G = 255, B = 100},
+        ["Yellow 🟡"] = {R = 255, G = 220, B = 0}
+    }
+    local colorNames = {"Purple 💜", "Cyan 🩵", "Red 🔴", "Green 🟢", "Yellow 🟡"}
+
+    local Frame = Instance.new("Frame")
+    Frame.Size = UDim2.new(0.96, 0, 0, 32)
+    Frame.BackgroundColor3 = Color3.fromRGB(22, 26, 38)
+    Frame.Parent = parentPage
+
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 6)
+    Corner.Parent = Frame
+
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(0.5, 0, 1, 0)
+    Label.Text = "  " .. title
+    Label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    Label.Font = Enum.Font.GothamMedium
+    Label.TextSize = 9
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.BackgroundTransparency = 1
+    Label.Parent = Frame
+
+    local DropBtn = Instance.new("TextButton")
+    DropBtn.Size = UDim2.new(0.45, 0, 0.7, 0)
+    DropBtn.Position = UDim2.new(0.52, 0, 0.15, 0)
+    DropBtn.BackgroundColor3 = Color3.fromRGB(35, 45, 68)
+    DropBtn.Text = "Purple 💜"
+    DropBtn.TextColor3 = Color3.fromRGB(170, 0, 255)
+    DropBtn.Font = Enum.Font.GothamBold
+    DropBtn.TextSize = 8
+    DropBtn.Parent = Frame
+
+    local idx = 1
+    DropBtn.MouseButton1Click:Connect(function()
+        idx = (idx % #colorNames) + 1
+        local selectedName = colorNames[idx]
+        _G.Config[configVar] = colors[selectedName]
+        DropBtn.Text = selectedName
+        local c = colors[selectedName]
+        DropBtn.TextColor3 = Color3.fromRGB(c.R, c.G, c.B)
+    end)
+end
+
 -- ==========================================
--- TABS CREATION
+-- TABS SETUP
 -- ==========================================
 
 local CombatTab = CreateTab("⚔️ PVP Controls")
-local SettingsTab = CreateTab("⚙️ Visuals")
+local VisualsTab = CreateTab("👁️ Health & Colors")
 
 tabs[1].Page.Visible = true
 tabs[1].Btn.TextColor3 = Color3.fromRGB(255, 45, 85)
 
--- 1. التحكم بـ Normal Aimbot
-AddToggle(CombatTab, "Normal Aimbot (Auto)", "NormalAimbot")
+-- PVP Controls
+AddToggle(CombatTab, "Normal Aimbot (Sticky)", "NormalAimbot")
 AddKeybindPicker(CombatTab, "Aimbot Key", "NormalAimbotKey")
 
--- 2. التحكم بـ Target Lock
 AddToggle(CombatTab, "Target Lock (Manual)", "TargetLock")
 AddKeybindPicker(CombatTab, "Target Lock Key", "TargetLockKey")
 
--- Visuals
-AddToggle(SettingsTab, "Show PVP Health Bar", "ShowHealth")
+-- Visuals & Colors
+AddToggle(VisualsTab, "Show PVP Health Bar", "ShowHealth")
+AddColorPicker(VisualsTab, "Target Hitbox Color", "TargetColor")
+AddColorPicker(VisualsTab, "Player Health Color", "PlayerHealthColor")
