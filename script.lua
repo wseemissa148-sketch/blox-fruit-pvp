@@ -11,7 +11,7 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 -- ==========================================
--- 1. CONFIGURATION
+-- 1. CONFIGURATION & THEMES
 -- ==========================================
 
 _G.Config = {
@@ -28,14 +28,65 @@ _G.Config = {
     PlayerHealthColor = {R = 0, G = 255, B = 150},
     MobHealthColor = {R = 255, G = 50, B = 50},
 
+    CurrentTheme = "Cyber Dark",
+
     Whitelist = {},
     TargetList = {}
 }
 
+local Themes = {
+    ["Cyber Dark"] = {
+        MainBg = Color3.fromRGB(13, 16, 24),
+        SidebarBg = Color3.fromRGB(18, 21, 32),
+        CardBg = Color3.fromRGB(22, 26, 38),
+        Accent = Color3.fromRGB(0, 180, 255),
+        Text = Color3.fromRGB(255, 255, 255),
+        SubText = Color3.fromRGB(160, 160, 175),
+        CornerRadius = 10
+    },
+    ["Midnight Purple"] = {
+        MainBg = Color3.fromRGB(18, 14, 28),
+        SidebarBg = Color3.fromRGB(24, 18, 38),
+        CardBg = Color3.fromRGB(32, 24, 50),
+        Accent = Color3.fromRGB(170, 0, 255),
+        Text = Color3.fromRGB(255, 255, 255),
+        SubText = Color3.fromRGB(180, 160, 200),
+        CornerRadius = 14
+    },
+    ["Emerald Neon"] = {
+        MainBg = Color3.fromRGB(10, 22, 18),
+        SidebarBg = Color3.fromRGB(14, 30, 24),
+        CardBg = Color3.fromRGB(18, 40, 32),
+        Accent = Color3.fromRGB(0, 230, 140),
+        Text = Color3.fromRGB(255, 255, 255),
+        SubText = Color3.fromRGB(160, 200, 180),
+        CornerRadius = 8
+    },
+    ["Crimson Red"] = {
+        MainBg = Color3.fromRGB(24, 12, 14),
+        SidebarBg = Color3.fromRGB(32, 16, 18),
+        CardBg = Color3.fromRGB(42, 20, 24),
+        Accent = Color3.fromRGB(255, 45, 70),
+        Text = Color3.fromRGB(255, 255, 255),
+        SubText = Color3.fromRGB(200, 160, 165),
+        CornerRadius = 6
+    },
+    ["Minimal Light"] = {
+        MainBg = Color3.fromRGB(240, 242, 245),
+        SidebarBg = Color3.fromRGB(225, 228, 235),
+        CardBg = Color3.fromRGB(255, 255, 255),
+        Accent = Color3.fromRGB(40, 90, 230),
+        Text = Color3.fromRGB(30, 30, 40),
+        SubText = Color3.fromRGB(100, 110, 125),
+        CornerRadius = 12
+    }
+}
+
 local lockedTargetPart = nil
+local ThemeUpdateSignals = {}
 
 -- ==========================================
--- 2. HEALTH OVERLAY ENGINE (FIXED & UNLIMITED DISTANCE)
+-- 2. HEALTH OVERLAY ENGINE
 -- ==========================================
 
 local function RemoveHealthUI(character)
@@ -62,7 +113,7 @@ local function CreateHealthUI(character, isPlayer)
     bb.Size = UDim2.new(0, 140, 0, 35)
     bb.StudsOffset = Vector3.new(0, 3, 0)
     bb.AlwaysOnTop = true
-    bb.MaxDistance = math.huge -- رؤية الرؤية من أي مسافة في الخريطة
+    bb.MaxDistance = math.huge
     bb.Parent = head
 
     local col = isPlayer and _G.Config.PlayerHealthColor or _G.Config.MobHealthColor
@@ -229,7 +280,7 @@ end
 task.spawn(HookEnemies)
 
 -- ==========================================
--- 3. HARD LOCK AIMBOT ENGINE (NO SMOOTHNESS)
+-- 3. HARD LOCK AIMBOT ENGINE
 -- ==========================================
 
 local function IsWhitelisted(name)
@@ -287,7 +338,6 @@ local function GetClosestToCamera(isPlayerTarget)
     return closestPart
 end
 
--- تثبيت كلي ومباشر للكاميرا بدون سلاسة
 RunService.RenderStepped:Connect(function()
     local isAimbotActive = _G.Config.PlayerAimbot or _G.Config.MobAimbot
 
@@ -298,10 +348,7 @@ RunService.RenderStepped:Connect(function()
 
         if lockedTargetPart and lockedTargetPart.Parent then
             pcall(function()
-                -- تثبيت قوي ومباشر للوجهة (Hard Lock)
                 Camera.CFrame = CFrame.new(Camera.CFrame.Position, lockedTargetPart.Position)
-
-                -- Hitbox
                 lockedTargetPart.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
                 lockedTargetPart.Transparency = 0.7
                 lockedTargetPart.CanCollide = false
@@ -326,7 +373,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 end)
 
 -- ==========================================
--- 4. GUI ENGINE (PVP ICON & XENO COMPATIBLE)
+-- 4. GUI ENGINE WITH DYNAMIC THEMES
 -- ==========================================
 
 if CoreGui:FindFirstChild("PvpCombatHubUI") then
@@ -348,28 +395,23 @@ end
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 510, 0, 360)
 MainFrame.Position = UDim2.new(0.5, -255, 0.25, 0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(13, 16, 24)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.Parent = ScreenGui
 
 local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 10)
 MainCorner.Parent = MainFrame
 
 local MainStroke = Instance.new("UIStroke")
-MainStroke.Color = Color3.fromRGB(0, 180, 255)
 MainStroke.Thickness = 1.5
 MainStroke.Parent = MainFrame
 
 local Sidebar = Instance.new("Frame")
 Sidebar.Size = UDim2.new(0, 140, 1, 0)
-Sidebar.BackgroundColor3 = Color3.fromRGB(18, 21, 32)
 Sidebar.Parent = MainFrame
 
 local SideCorner = Instance.new("UICorner")
-SideCorner.CornerRadius = UDim.new(0, 10)
 SideCorner.Parent = Sidebar
 
 local SideLayout = Instance.new("UIListLayout")
@@ -380,7 +422,6 @@ SideLayout.Parent = Sidebar
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, 0, 0, 42)
 TitleLabel.Text = "⚔️ PVP COMBAT"
-TitleLabel.TextColor3 = Color3.fromRGB(0, 180, 255)
 TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextSize = 11
 TitleLabel.BackgroundTransparency = 1
@@ -392,36 +433,57 @@ ContentArea.Position = UDim2.new(0, 145, 0, 5)
 ContentArea.BackgroundTransparency = 1
 ContentArea.Parent = MainFrame
 
+-- ZER PVP ICON BUTTON
 local ToggleBtn = Instance.new("TextButton")
-ToggleBtn.Size = UDim2.new(0, 85, 0, 30)
+ToggleBtn.Size = UDim2.new(0, 65, 0, 32)
 ToggleBtn.Position = UDim2.new(0.02, 0, 0.05, 0)
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(18, 21, 32)
-ToggleBtn.Text = "TOGGLE MENU"
-ToggleBtn.TextColor3 = Color3.fromRGB(0, 180, 255)
+ToggleBtn.Text = "PVP"
 ToggleBtn.Font = Enum.Font.GothamBold
-ToggleBtn.TextSize = 9
+ToggleBtn.TextSize = 12
 ToggleBtn.Parent = ScreenGui
 
 local ToggleCorner = Instance.new("UICorner")
-ToggleCorner.CornerRadius = UDim.new(0, 8)
 ToggleCorner.Parent = ToggleBtn
 
+local ToggleStroke = Instance.new("UIStroke")
+ToggleStroke.Thickness = 1
+ToggleStroke.Parent = ToggleBtn
+
 ToggleBtn.MouseButton1Click:Connect(function() MainFrame.Visible = not MainFrame.Visible end)
+
+local function ApplyTheme()
+    local theme = Themes[_G.Config.CurrentTheme] or Themes["Cyber Dark"]
+
+    MainFrame.BackgroundColor3 = theme.MainBg
+    MainStroke.Color = theme.Accent
+
+    Sidebar.BackgroundColor3 = theme.SidebarBg
+    TitleLabel.TextColor3 = theme.Accent
+
+    MainCorner.CornerRadius = UDim.new(0, theme.CornerRadius)
+    SideCorner.CornerRadius = UDim.new(0, theme.CornerRadius)
+    ToggleCorner.CornerRadius = UDim.new(0, theme.CornerRadius)
+
+    ToggleBtn.BackgroundColor3 = theme.SidebarBg
+    ToggleBtn.TextColor3 = theme.Accent
+    ToggleStroke.Color = theme.Accent
+
+    for _, updateFunc in ipairs(ThemeUpdateSignals) do
+        updateFunc(theme)
+    end
+end
 
 local tabs = {}
 
 local function CreateTab(tabName)
     local TabBtn = Instance.new("TextButton")
     TabBtn.Size = UDim2.new(0.9, 0, 0, 30)
-    TabBtn.BackgroundColor3 = Color3.fromRGB(26, 31, 46)
     TabBtn.Text = tabName
-    TabBtn.TextColor3 = Color3.fromRGB(160, 160, 175)
     TabBtn.Font = Enum.Font.GothamBold
     TabBtn.TextSize = 9
     TabBtn.Parent = Sidebar
 
     local BtnCorner = Instance.new("UICorner")
-    BtnCorner.CornerRadius = UDim.new(0, 6)
     BtnCorner.Parent = TabBtn
 
     local TabPage = Instance.new("ScrollingFrame")
@@ -441,15 +503,24 @@ local function CreateTab(tabName)
         TabPage.CanvasSize = UDim2.new(0, 0, 0, PageLayout.AbsoluteContentSize.Y + 10)
     end)
 
+    local function UpdateTabStyle(currentTheme)
+        BtnCorner.CornerRadius = UDim.new(0, math.max(4, currentTheme.CornerRadius - 4))
+        if TabPage.Visible then
+            TabBtn.TextColor3 = currentTheme.Accent
+            TabBtn.BackgroundColor3 = currentTheme.CardBg
+        else
+            TabBtn.TextColor3 = currentTheme.SubText
+            TabBtn.BackgroundColor3 = currentTheme.SidebarBg
+        end
+    end
+    table.insert(ThemeUpdateSignals, UpdateTabStyle)
+
     TabBtn.MouseButton1Click:Connect(function()
         for _, t in pairs(tabs) do
             t.Page.Visible = false
-            t.Btn.TextColor3 = Color3.fromRGB(160, 160, 175)
-            t.Btn.BackgroundColor3 = Color3.fromRGB(26, 31, 46)
         end
         TabPage.Visible = true
-        TabBtn.TextColor3 = Color3.fromRGB(0, 180, 255)
-        TabBtn.BackgroundColor3 = Color3.fromRGB(35, 45, 68)
+        ApplyTheme()
     end)
 
     table.insert(tabs, {Btn = TabBtn, Page = TabPage})
@@ -459,32 +530,35 @@ end
 local function AddToggle(parentPage, name, configVar, callback)
     local Button = Instance.new("TextButton")
     Button.Size = UDim2.new(0.96, 0, 0, 32)
-    Button.BackgroundColor3 = Color3.fromRGB(22, 26, 38)
     Button.Text = "  " .. name
-    Button.TextColor3 = _G.Config[configVar] and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(160, 160, 160)
     Button.Font = Enum.Font.GothamMedium
     Button.TextSize = 9
     Button.TextXAlignment = Enum.TextXAlignment.Left
     Button.Parent = parentPage
 
     local BtnCorner = Instance.new("UICorner")
-    BtnCorner.CornerRadius = UDim.new(0, 6)
     BtnCorner.Parent = Button
 
     local Indicator = Instance.new("Frame")
     Indicator.Size = UDim2.new(0, 26, 0, 14)
     Indicator.Position = UDim2.new(1, -32, 0.5, -7)
-    Indicator.BackgroundColor3 = _G.Config[configVar] and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(45, 50, 65)
     Indicator.Parent = Button
 
     local IndCorner = Instance.new("UICorner")
     IndCorner.CornerRadius = UDim.new(0, 10)
     IndCorner.Parent = Indicator
 
+    local function UpdateToggleStyle(theme)
+        BtnCorner.CornerRadius = UDim.new(0, math.max(4, theme.CornerRadius - 4))
+        Button.BackgroundColor3 = theme.CardBg
+        Button.TextColor3 = _G.Config[configVar] and theme.Text or theme.SubText
+        Indicator.BackgroundColor3 = _G.Config[configVar] and theme.Accent or Color3.fromRGB(50, 50, 60)
+    end
+    table.insert(ThemeUpdateSignals, UpdateToggleStyle)
+
     Button.MouseButton1Click:Connect(function()
         _G.Config[configVar] = not _G.Config[configVar]
-        Indicator.BackgroundColor3 = _G.Config[configVar] and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(45, 50, 65)
-        Button.TextColor3 = _G.Config[configVar] and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(160, 160, 160)
+        ApplyTheme()
         if callback then callback() end
     end)
     return Button
@@ -493,17 +567,14 @@ end
 local function AddKeybindPicker(parentPage, name, configVar)
     local Frame = Instance.new("Frame")
     Frame.Size = UDim2.new(0.96, 0, 0, 32)
-    Frame.BackgroundColor3 = Color3.fromRGB(22, 26, 38)
     Frame.Parent = parentPage
 
     local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 6)
     Corner.Parent = Frame
 
     local Label = Instance.new("TextLabel")
     Label.Size = UDim2.new(0.6, 0, 1, 0)
     Label.Text = "  " .. name
-    Label.TextColor3 = Color3.fromRGB(200, 200, 200)
     Label.Font = Enum.Font.GothamMedium
     Label.TextSize = 9
     Label.TextXAlignment = Enum.TextXAlignment.Left
@@ -513,16 +584,23 @@ local function AddKeybindPicker(parentPage, name, configVar)
     local BindBtn = Instance.new("TextButton")
     BindBtn.Size = UDim2.new(0.35, 0, 0.7, 0)
     BindBtn.Position = UDim2.new(0.62, 0, 0.15, 0)
-    BindBtn.BackgroundColor3 = Color3.fromRGB(35, 45, 68)
     BindBtn.Text = "[" .. tostring(_G.Config[configVar]) .. "]"
-    BindBtn.TextColor3 = Color3.fromRGB(0, 180, 255)
     BindBtn.Font = Enum.Font.GothamBold
     BindBtn.TextSize = 9
     BindBtn.Parent = Frame
 
     local BtnCorner = Instance.new("UICorner")
-    BtnCorner.CornerRadius = UDim.new(0, 5)
     BtnCorner.Parent = BindBtn
+
+    local function UpdateBindStyle(theme)
+        Corner.CornerRadius = UDim.new(0, math.max(4, theme.CornerRadius - 4))
+        BtnCorner.CornerRadius = UDim.new(0, math.max(4, theme.CornerRadius - 6))
+        Frame.BackgroundColor3 = theme.CardBg
+        Label.TextColor3 = theme.Text
+        BindBtn.BackgroundColor3 = theme.SidebarBg
+        BindBtn.TextColor3 = theme.Accent
+    end
+    table.insert(ThemeUpdateSignals, UpdateBindStyle)
 
     BindBtn.MouseButton1Click:Connect(function()
         BindBtn.Text = "[ Press... ]"
@@ -541,17 +619,14 @@ end
 local function AddDropdown(parentPage, title, optionsList, configVar, callback)
     local Frame = Instance.new("Frame")
     Frame.Size = UDim2.new(0.96, 0, 0, 32)
-    Frame.BackgroundColor3 = Color3.fromRGB(22, 26, 38)
     Frame.Parent = parentPage
 
     local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 6)
     Corner.Parent = Frame
 
     local Label = Instance.new("TextLabel")
     Label.Size = UDim2.new(0.45, 0, 1, 0)
     Label.Text = "  " .. title
-    Label.TextColor3 = Color3.fromRGB(200, 200, 200)
     Label.Font = Enum.Font.GothamMedium
     Label.TextSize = 9
     Label.TextXAlignment = Enum.TextXAlignment.Left
@@ -561,17 +636,28 @@ local function AddDropdown(parentPage, title, optionsList, configVar, callback)
     local DropBtn = Instance.new("TextButton")
     DropBtn.Size = UDim2.new(0.50, 0, 0.7, 0)
     DropBtn.Position = UDim2.new(0.47, 0, 0.15, 0)
-    DropBtn.BackgroundColor3 = Color3.fromRGB(35, 45, 68)
     DropBtn.Text = tostring(_G.Config[configVar])
-    DropBtn.TextColor3 = Color3.fromRGB(0, 180, 255)
     DropBtn.Font = Enum.Font.GothamBold
     DropBtn.TextSize = 8
     DropBtn.Parent = Frame
+
+    local BtnCorner = Instance.new("UICorner")
+    BtnCorner.Parent = DropBtn
 
     local idx = 1
     for i, opt in ipairs(optionsList) do
         if opt == _G.Config[configVar] then idx = i break end
     end
+
+    local function UpdateDropStyle(theme)
+        Corner.CornerRadius = UDim.new(0, math.max(4, theme.CornerRadius - 4))
+        BtnCorner.CornerRadius = UDim.new(0, math.max(4, theme.CornerRadius - 6))
+        Frame.BackgroundColor3 = theme.CardBg
+        Label.TextColor3 = theme.Text
+        DropBtn.BackgroundColor3 = theme.SidebarBg
+        DropBtn.TextColor3 = theme.Accent
+    end
+    table.insert(ThemeUpdateSignals, UpdateDropStyle)
 
     DropBtn.MouseButton1Click:Connect(function()
         idx = (idx % #optionsList) + 1
@@ -584,18 +670,15 @@ end
 local function AddListManager(parentPage, title, listTable)
     local Frame = Instance.new("Frame")
     Frame.Size = UDim2.new(0.96, 0, 0, 75)
-    Frame.BackgroundColor3 = Color3.fromRGB(22, 26, 38)
     Frame.Parent = parentPage
 
     local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 6)
     Corner.Parent = Frame
 
     local Label = Instance.new("TextLabel")
     Label.Size = UDim2.new(1, -10, 0, 20)
     Label.Position = UDim2.new(0, 5, 0, 2)
     Label.Text = title
-    Label.TextColor3 = Color3.fromRGB(0, 180, 255)
     Label.Font = Enum.Font.GothamBold
     Label.TextSize = 9
     Label.TextXAlignment = Enum.TextXAlignment.Left
@@ -605,10 +688,8 @@ local function AddListManager(parentPage, title, listTable)
     local TextBox = Instance.new("TextBox")
     TextBox.Size = UDim2.new(0.55, 0, 0, 24)
     TextBox.Position = UDim2.new(0.03, 0, 0.35, 0)
-    TextBox.BackgroundColor3 = Color3.fromRGB(15, 18, 26)
     TextBox.Text = ""
     TextBox.PlaceholderText = "Player Name..."
-    TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
     TextBox.Font = Enum.Font.GothamMedium
     TextBox.TextSize = 8
     TextBox.Parent = Frame
@@ -641,12 +722,21 @@ local function AddListManager(parentPage, title, listTable)
     StatusLabel.Size = UDim2.new(1, -10, 0, 15)
     StatusLabel.Position = UDim2.new(0, 5, 0.75, 0)
     StatusLabel.Text = "List: " .. table.concat(listTable, ", ")
-    StatusLabel.TextColor3 = Color3.fromRGB(150, 160, 175)
     StatusLabel.Font = Enum.Font.GothamMedium
     StatusLabel.TextSize = 8
     StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
     StatusLabel.BackgroundTransparency = 1
     StatusLabel.Parent = Frame
+
+    local function UpdateListStyle(theme)
+        Corner.CornerRadius = UDim.new(0, math.max(4, theme.CornerRadius - 4))
+        Frame.BackgroundColor3 = theme.CardBg
+        Label.TextColor3 = theme.Accent
+        TextBox.BackgroundColor3 = theme.MainBg
+        TextBox.TextColor3 = theme.Text
+        StatusLabel.TextColor3 = theme.SubText
+    end
+    table.insert(ThemeUpdateSignals, UpdateListStyle)
 
     AddBtn.MouseButton1Click:Connect(function()
         local name = TextBox.Text:match("^%s*(.-)%s*$")
@@ -679,24 +769,29 @@ local function AddListManager(parentPage, title, listTable)
 end
 
 -- ==========================================
--- TABS SETUP
+-- TABS & CONTROLS SETUP
 -- ==========================================
 
 local CombatTab = CreateTab("⚔️ Combat & Aimbot")
 local VisualsTab = CreateTab("👁️ Health & UI")
+local SettingsTab = CreateTab("🎨 UI Themes")
 
 tabs[1].Page.Visible = true
-tabs[1].Btn.TextColor3 = Color3.fromRGB(0, 180, 255)
 
--- Combat Options
+-- Combat Tab
 AddToggle(CombatTab, "Player Camera Aimbot", "PlayerAimbot")
 AddKeybindPicker(CombatTab, "Player Aimbot Key", "PlayerAimbotKey")
 AddToggle(CombatTab, "Mob Camera Aimbot", "MobAimbot")
 AddKeybindPicker(CombatTab, "Mob Aimbot Key", "MobAimbotKey")
-
 AddListManager(CombatTab, "🛡️ Whitelist", _G.Config.Whitelist)
 AddListManager(CombatTab, "🎯 Target List", _G.Config.TargetList)
 
--- Visual Options
+-- Visuals Tab
 AddToggle(VisualsTab, "Show Health Overlay", "ShowHealth", RefreshAllHealthUI)
 AddDropdown(VisualsTab, "Health Style", {"Modern Card", "Classic Bar", "Text Only", "Gradient Bar", "Compact Line"}, "HealthStyle", RefreshAllHealthUI)
+
+-- Settings / Themes Tab
+AddDropdown(SettingsTab, "UI Theme Model", {"Cyber Dark", "Midnight Purple", "Emerald Neon", "Crimson Red", "Minimal Light"}, "CurrentTheme", ApplyTheme)
+
+-- Apply initial theme
+ApplyTheme()
