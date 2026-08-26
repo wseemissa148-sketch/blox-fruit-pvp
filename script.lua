@@ -1,3 +1,7 @@
+-- ==========================================================
+-- ⚔️ PVP COMBAT HUB (Xeno Executor & GitHub Ready)
+-- ==========================================================
+
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
@@ -18,7 +22,7 @@ _G.Config = {
     
     TargetPart = "Head",
     HitboxSize = 18,
-    Smoothness = 0.25, -- مدى سلاسة التثبيت (كلما قل الرقم زادت السلاسة)
+    Smoothness = 0.25, -- سلاسة تتبع الكاميرا (0.1 إلى 1)
 
     ShowHealth = true,
     HealthStyle = "Modern Card",
@@ -29,10 +33,10 @@ _G.Config = {
     TargetList = {}
 }
 
-local currentTargetPart = nil
+local lockedTargetPart = nil
 
 -- ==========================================
--- 2. HEALTH OVERLAY ENGINE
+-- 2. HEALTH OVERLAY ENGINE (EXPANDED STYLES)
 -- ==========================================
 
 local function RemoveHealthUI(character)
@@ -56,6 +60,7 @@ local function CreateHealthUI(character, isPlayer)
     bb.Size = UDim2.new(0, 140, 0, 35)
     bb.StudsOffset = Vector3.new(0, 3, 0)
     bb.AlwaysOnTop = true
+    bb.MaxDistance = 400
     bb.Parent = head
 
     local col = isPlayer and _G.Config.PlayerHealthColor or _G.Config.MobHealthColor
@@ -75,7 +80,7 @@ local function CreateHealthUI(character, isPlayer)
         local function UpdateText()
             if not hum or not hum.Parent then return end
             local tag = isPlayer and "👤 " or "👾 "
-            txt.Text = tag .. math.floor(hum.Health) .. " / " .. math.floor(hum.MaxHealth)
+            txt.Text = tag .. math.floor(math.max(0, hum.Health)) .. " / " .. math.floor(hum.MaxHealth)
         end
         UpdateText()
         hum.HealthChanged:Connect(UpdateText)
@@ -145,41 +150,11 @@ local function CreateHealthUI(character, isPlayer)
             fill.Size = UDim2.new(math.clamp(hum.Health / hum.MaxHealth, 0, 1), 0, 1, 0)
         end)
 
-    elseif _G.Config.HealthStyle == "Compact Dot" then
-        local dot = Instance.new("Frame")
-        dot.Size = UDim2.new(0, 10, 0, 10)
-        dot.Position = UDim2.new(0.5, -5, 0.5, -5)
-        dot.BackgroundColor3 = mainColor
-        dot.Parent = bb
-
-        local dCorner = Instance.new("UICorner")
-        dCorner.CornerRadius = UDim.new(1, 0)
-        dCorner.Parent = dot
-
-        local txt = Instance.new("TextLabel")
-        txt.Size = UDim2.new(0, 50, 0, 15)
-        txt.Position = UDim2.new(0.5, 8, 0.5, -7)
-        txt.BackgroundTransparency = 1
-        txt.Font = Enum.Font.GothamBold
-        txt.TextSize = 9
-        txt.TextColor3 = Color3.fromRGB(255, 255, 255)
-        txt.TextXAlignment = Enum.TextXAlignment.Left
-        txt.Parent = bb
-
-        local function UpdatePct()
-            if hum and hum.Parent then
-                local pct = math.floor((hum.Health / hum.MaxHealth) * 100)
-                txt.Text = pct .. "%"
-            end
-        end
-        UpdatePct()
-        hum.HealthChanged:Connect(UpdatePct)
-
     elseif _G.Config.HealthStyle == "Gradient Bar" then
         local bg = Instance.new("Frame")
-        bg.Size = UDim2.new(1, 0, 0, 6)
+        bg.Size = UDim2.new(1, 0, 0, 7)
         bg.Position = UDim2.new(0, 0, 0.5, -3)
-        bg.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+        bg.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
         bg.BorderSizePixel = 0
         bg.Parent = bb
 
@@ -189,30 +164,23 @@ local function CreateHealthUI(character, isPlayer)
         fill.Parent = bg
 
         local function UpdateGradient()
-            local hpPercent = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
-            fill.Size = UDim2.new(hpPercent, 0, 1, 0)
-            fill.BackgroundColor3 = Color3.fromHSV(hpPercent * 0.35, 0.9, 0.9)
+            local pct = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
+            fill.Size = UDim2.new(pct, 0, 1, 0)
+            fill.BackgroundColor3 = Color3.fromHSV(pct * 0.35, 0.9, 0.9)
         end
         UpdateGradient()
         hum.HealthChanged:Connect(UpdateGradient)
 
-    elseif _G.Config.HealthStyle == "Minimalist" then
-        local bg = Instance.new("Frame")
-        bg.Size = UDim2.new(0.8, 0, 0, 3)
-        bg.Position = UDim2.new(0.1, 0, 0.5, -1)
-        bg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-        bg.BackgroundTransparency = 0.5
-        bg.BorderSizePixel = 0
-        bg.Parent = bb
-
+    elseif _G.Config.HealthStyle == "Compact Line" then
         local fill = Instance.new("Frame")
-        fill.Size = UDim2.new(math.clamp(hum.Health / hum.MaxHealth, 0, 1), 0, 1, 0)
+        fill.Size = UDim2.new(math.clamp(hum.Health / hum.MaxHealth, 0, 1), 0, 0, 3)
+        fill.Position = UDim2.new(0, 0, 0.8, 0)
         fill.BackgroundColor3 = mainColor
         fill.BorderSizePixel = 0
-        fill.Parent = bg
+        fill.Parent = bb
 
         hum.HealthChanged:Connect(function()
-            fill.Size = UDim2.new(math.clamp(hum.Health / hum.MaxHealth, 0, 1), 0, 1, 0)
+            fill.Size = UDim2.new(math.clamp(hum.Health / hum.MaxHealth, 0, 1), 0, 0, 3)
         end)
     end
 
@@ -246,7 +214,7 @@ end
 task.spawn(HookEnemies)
 
 -- ==========================================
--- 3. SMOOTH CAMERA LOCK AIMBOT ENGINE
+-- 3. CAMERA FOV AIMBOT ENGINE (SMOOTH & STICKY)
 -- ==========================================
 
 local function IsWhitelisted(name)
@@ -264,23 +232,24 @@ local function IsTargeted(name)
     return false
 end
 
--- البحث عن الهدف الأقرب لمركز الكاميرا (الشاشة)
-local function GetClosestTargetToCamera(isPlayerTarget)
-    local closest, shortestDist = nil, math.huge
+-- رصد الأقرب للكاميرا (Center Screen FOV)
+local function GetClosestToCamera(isPlayerTarget)
+    local closestPart = nil
+    local shortestDistance = math.huge
     local viewportCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 
     if isPlayerTarget then
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= LocalPlayer and p.Character and not IsWhitelisted(p.Name) and IsTargeted(p.Name) then
                 local targetPart = p.Character:FindFirstChild(_G.Config.TargetPart) or p.Character:FindFirstChild("HumanoidRootPart")
-                local pHum = p.Character:FindFirstChild("Humanoid")
-                if targetPart and pHum and pHum.Health > 0 then
+                local hum = p.Character:FindFirstChild("Humanoid")
+                if targetPart and hum and hum.Health > 0 then
                     local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
                     if onScreen then
                         local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - viewportCenter).Magnitude
-                        if screenDist < shortestDist then
-                            shortestDist = screenDist
-                            closest = targetPart
+                        if screenDist < shortestDistance then
+                            shortestDistance = screenDist
+                            closestPart = targetPart
                         end
                     end
                 end
@@ -291,33 +260,47 @@ local function GetClosestTargetToCamera(isPlayerTarget)
         if enemies then
             for _, mob in pairs(enemies:GetChildren()) do
                 local targetPart = mob:FindFirstChild(_G.Config.TargetPart) or mob:FindFirstChild("HumanoidRootPart")
-                local mHum = mob:FindFirstChild("Humanoid")
-                if targetPart and mHum and mHum.Health > 0 then
+                local hum = mob:FindFirstChild("Humanoid")
+                if targetPart and hum and hum.Health > 0 then
                     local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
                     if onScreen then
                         local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - viewportCenter).Magnitude
-                        if screenDist < shortestDist then
-                            shortestDist = screenDist
-                            closest = targetPart
+                        if screenDist < shortestDistance then
+                            shortestDistance = screenDist
+                            closestPart = targetPart
                         end
                     end
                 end
             end
         end
     end
-    return closest
+    return closestPart
 end
 
--- اختيار الهدف
-task.spawn(function()
-    while task.wait(0.03) do
-        if _G.Config.PlayerAimbot then
-            currentTargetPart = GetClosestTargetToCamera(true)
-        elseif _G.Config.MobAimbot then
-            currentTargetPart = GetClosestTargetToCamera(false)
-        else
-            currentTargetPart = nil
+-- تتبع سلس وثابت مع تحريك الكاميرا
+RunService.RenderStepped:Connect(function()
+    local isAimbotActive = _G.Config.PlayerAimbot or _G.Config.MobAimbot
+
+    if isAimbotActive then
+        -- إذا لم يحدد هدف بعد أو مات الهدف الحالي، يبحث عن هدف أقرب للكاميرا
+        if not lockedTargetPart or not lockedTargetPart.Parent or not lockedTargetPart.Parent:FindFirstChild("Humanoid") or lockedTargetPart.Parent.Humanoid.Health <= 0 then
+            lockedTargetPart = GetClosestToCamera(_G.Config.PlayerAimbot)
         end
+
+        if lockedTargetPart and lockedTargetPart.Parent then
+            pcall(function()
+                -- توجيه سلس لمركز الكاميرا نحو الهدف (Smooth Lerp)
+                local targetCFrame = CFrame.new(Camera.CFrame.Position, lockedTargetPart.Position)
+                Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, _G.Config.Smoothness)
+
+                -- Hitbox Expander
+                lockedTargetPart.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
+                lockedTargetPart.Transparency = 0.7
+                lockedTargetPart.CanCollide = false
+            end)
+        end
+    else
+        lockedTargetPart = nil
     end
 end)
 
@@ -326,39 +309,34 @@ UserInputService.InputBegan:Connect(function(input, processed)
     pcall(function()
         if input.KeyCode == Enum.KeyCode[_G.Config.PlayerAimbotKey] then
             _G.Config.PlayerAimbot = not _G.Config.PlayerAimbot
+            lockedTargetPart = nil
         elseif input.KeyCode == Enum.KeyCode[_G.Config.MobAimbotKey] then
             _G.Config.MobAimbot = not _G.Config.MobAimbot
+            lockedTargetPart = nil
         end
     end)
 end)
 
--- سلاسة توجيه الكاميرا مع تضخم الـ Hitbox
-RunService.RenderStepped:Connect(function()
-    if currentTargetPart and currentTargetPart.Parent and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        pcall(function()
-            -- توجيه الكاميرا بسلاسة نحو الهدف (Smooth Lock)
-            local targetCFrame = CFrame.new(Camera.CFrame.Position, currentTargetPart.Position)
-            Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, _G.Config.Smoothness)
-
-            -- تكبير الـ Hitbox
-            currentTargetPart.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
-            currentTargetPart.Transparency = 0.7
-            currentTargetPart.CanCollide = false
-        end)
-    end
-end)
-
 -- ==========================================
--- 4. USER INTERFACE (GUI)
+-- 4. GUI ENGINE (PVP ICON & XENO COMPATIBLE)
 -- ==========================================
 
-if CoreGui:FindFirstChild("BloxFruitsUltraHubUI") then
-    CoreGui.BloxFruitsUltraHubUI:Destroy()
+if CoreGui:FindFirstChild("PvpCombatHubUI") then
+    CoreGui.PvpCombatHubUI:Destroy()
 end
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "BloxFruitsUltraHubUI"
-ScreenGui.Parent = CoreGui
+ScreenGui.Name = "PvpCombatHubUI"
+
+-- حماية واجهة Xeno
+if gethui then
+    ScreenGui.Parent = gethui()
+elseif syn and syn.protect_gui then
+    syn.protect_gui(ScreenGui)
+    ScreenGui.Parent = CoreGui
+else
+    ScreenGui.Parent = CoreGui
+end
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 510, 0, 360)
@@ -702,9 +680,9 @@ tabs[1].Page.Visible = true
 tabs[1].Btn.TextColor3 = Color3.fromRGB(0, 180, 255)
 
 -- Combat Options
-AddToggle(CombatTab, "Player Skill Aimbot", "PlayerAimbot")
+AddToggle(CombatTab, "Player Camera Aimbot", "PlayerAimbot")
 AddKeybindPicker(CombatTab, "Player Aimbot Key", "PlayerAimbotKey")
-AddToggle(CombatTab, "Mob Skill Aimbot", "MobAimbot")
+AddToggle(CombatTab, "Mob Camera Aimbot", "MobAimbot")
 AddKeybindPicker(CombatTab, "Mob Aimbot Key", "MobAimbotKey")
 
 AddListManager(CombatTab, "🛡️ Whitelist", _G.Config.Whitelist)
@@ -712,4 +690,4 @@ AddListManager(CombatTab, "🎯 Target List", _G.Config.TargetList)
 
 -- Visual Options
 AddToggle(VisualsTab, "Show Health Overlay", "ShowHealth")
-AddDropdown(VisualsTab, "Health Style", {"Modern Card", "Classic Bar", "Text Only", "Compact Dot", "Gradient Bar", "Minimalist"}, "HealthStyle")
+AddDropdown(VisualsTab, "Health Style", {"Modern Card", "Classic Bar", "Text Only", "Gradient Bar", "Compact Line"}, "HealthStyle")
