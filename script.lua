@@ -11,28 +11,31 @@ local Camera = workspace.CurrentCamera
 -- ==========================================
 
 _G.Config = {
-    PlayerAimbot = false,
-    PlayerAimbotKey = "G",
-    MobAimbot = false,
-    MobAimbotKey = "H",
-    
-    TargetPart = "Head",
-    HitboxSize = 18,
+    -- 1. Normal Aimbot (الأيم بوت العادي)
+    NormalAimbot = false,
+    NormalAimbotKey = "E",
 
+    -- 2. Target Lock (التثبيت اليدوي على هدف محدد)
+    TargetLock = false,
+    TargetLockKey = "G",
+
+    -- Aimbot Settings
+    Smoothness = 0.25, -- مدى سلاسة الحركة (0.1 سريع جداً إلى 0.5 سلس وجذاب)
+    TargetPart = "Head",
+    HitboxSize = 14,
+
+    -- UI Settings
     ShowHealth = true,
     HealthStyle = "Modern Card",
     PlayerHealthColor = {R = 0, G = 255, B = 150},
-    MobHealthColor = {R = 255, G = 50, B = 50},
-
-    -- اللون البنفسجي الافتراضي للهدف المثبت (Target Lock)
     TargetColor = {R = 170, G = 0, B = 255},
 
     Whitelist = {},
     TargetList = {}
 }
 
-local lockedTargetPart = nil
-local lockedTargetChar = nil
+local currentLockedPart = nil
+local currentLockedChar = nil
 local originalPartProperties = {}
 
 -- ==========================================
@@ -46,7 +49,7 @@ local function RemoveHealthUI(character)
     end
 end
 
-local function CreateHealthUI(character, isPlayer)
+local function CreateHealthUI(character)
     if not character or not _G.Config.ShowHealth then return end
     RemoveHealthUI(character)
 
@@ -62,47 +65,10 @@ local function CreateHealthUI(character, isPlayer)
     bb.AlwaysOnTop = true
     bb.Parent = head
 
-    local col = isPlayer and _G.Config.PlayerHealthColor or _G.Config.MobHealthColor
+    local col = _G.Config.PlayerHealthColor
     local mainColor = Color3.fromRGB(col.R, col.G, col.B)
 
-    if _G.Config.HealthStyle == "Text Only" then
-        local txt = Instance.new("TextLabel")
-        txt.Name = "Label"
-        txt.Size = UDim2.new(1, 0, 1, 0)
-        txt.BackgroundTransparency = 1
-        txt.Font = Enum.Font.GothamBold
-        txt.TextSize = 11
-        txt.TextColor3 = mainColor
-        txt.TextStrokeTransparency = 0.2
-        txt.Parent = bb
-
-        local function UpdateText()
-            if not hum or not hum.Parent then return end
-            local tag = isPlayer and "👤 " or "👾 "
-            txt.Text = tag .. math.floor(hum.Health) .. " / " .. math.floor(hum.MaxHealth)
-        end
-        UpdateText()
-        hum.HealthChanged:Connect(UpdateText)
-
-    elseif _G.Config.HealthStyle == "Classic Bar" then
-        local bg = Instance.new("Frame")
-        bg.Size = UDim2.new(1, 0, 0, 8)
-        bg.Position = UDim2.new(0, 0, 0.5, -4)
-        bg.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-        bg.BorderSizePixel = 0
-        bg.Parent = bb
-
-        local fill = Instance.new("Frame")
-        fill.Size = UDim2.new(math.clamp(hum.Health / hum.MaxHealth, 0, 1), 0, 1, 0)
-        fill.BackgroundColor3 = mainColor
-        fill.BorderSizePixel = 0
-        fill.Parent = bg
-
-        hum.HealthChanged:Connect(function()
-            fill.Size = UDim2.new(math.clamp(hum.Health / hum.MaxHealth, 0, 1), 0, 1, 0)
-        end)
-
-    elseif _G.Config.HealthStyle == "Modern Card" then
+    if _G.Config.HealthStyle == "Modern Card" then
         local card = Instance.new("Frame")
         card.Size = UDim2.new(1, 0, 1, 0)
         card.BackgroundColor3 = Color3.fromRGB(15, 18, 26)
@@ -117,7 +83,7 @@ local function CreateHealthUI(character, isPlayer)
         title.Size = UDim2.new(1, -10, 0, 14)
         title.Position = UDim2.new(0, 5, 0, 2)
         title.BackgroundTransparency = 1
-        title.Text = (isPlayer and "👤 " or "👾 ") .. character.Name
+        title.Text = "⚔️ PVP: " .. character.Name
         title.TextColor3 = Color3.fromRGB(240, 240, 240)
         title.Font = Enum.Font.GothamBold
         title.TextSize = 9
@@ -153,34 +119,23 @@ local function CreateHealthUI(character, isPlayer)
     hum.Died:Connect(function() bb:Destroy() end)
 end
 
-local function SetupCharacterUI(char, isPlayer)
-    if char then
-        task.defer(function() CreateHealthUI(char, isPlayer) end)
-    end
+local function SetupCharacterUI(char)
+    if char then task.defer(function() CreateHealthUI(char) end) end
 end
 
 for _, p in pairs(Players:GetPlayers()) do
     if p ~= LocalPlayer then
-        if p.Character then SetupCharacterUI(p.Character, true) end
-        p.CharacterAdded:Connect(function(c) SetupCharacterUI(c, true) end)
+        if p.Character then SetupCharacterUI(p.Character) end
+        p.CharacterAdded:Connect(function(c) SetupCharacterUI(c) end)
     end
 end
 
 Players.PlayerAdded:Connect(function(p)
-    p.CharacterAdded:Connect(function(c) SetupCharacterUI(c, true) end)
+    p.CharacterAdded:Connect(function(c) SetupCharacterUI(c) end)
 end)
 
-local function HookEnemies()
-    local enemies = workspace:FindFirstChild("Enemies")
-    if enemies then
-        for _, mob in pairs(enemies:GetChildren()) do SetupCharacterUI(mob, false) end
-        enemies.ChildAdded:Connect(function(mob) SetupCharacterUI(mob, false) end)
-    end
-end
-task.spawn(HookEnemies)
-
 -- ==========================================
--- 3. LOCK-ON AIMBOT ENGINE (تثبيت الهدف بالشاشة)
+-- 3. SMOOTH AIMBOT & TARGET LOCK ENGINE
 -- ==========================================
 
 local function IsWhitelisted(name)
@@ -190,50 +145,34 @@ local function IsWhitelisted(name)
     return false
 end
 
-local function IsTargeted(name)
-    if #_G.Config.TargetList == 0 then return true end
-    for _, v in ipairs(_G.Config.TargetList) do
-        if v:lower() == name:lower() then return true end
+local function ResetPreviousHitbox()
+    if currentLockedPart and originalPartProperties[currentLockedPart] then
+        pcall(function()
+            currentLockedPart.Size = originalPartProperties[currentLockedPart].Size
+            currentLockedPart.Transparency = originalPartProperties[currentLockedPart].Transparency
+            currentLockedPart.Color = originalPartProperties[currentLockedPart].Color
+        end)
     end
-    return false
+    currentLockedPart = nil
+    currentLockedChar = nil
 end
 
--- إيجاد أحدث هدف موجه عليه الماوس/الكاميرا لشاشة اللاعب
-local function GetTargetUnderCursor(isPlayerTarget)
+-- البحث عن الهدف الأقرب لمؤشر الماوس
+local function GetClosestTarget()
     local mousePos = UserInputService:GetMouseLocation()
-    local closest, shortestScreenDist = nil, math.huge
+    local closest, shortestDist = nil, math.huge
 
-    if isPlayerTarget then
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character and not IsWhitelisted(p.Name) and IsTargeted(p.Name) then
-                local targetPart = p.Character:FindFirstChild(_G.Config.TargetPart) or p.Character:FindFirstChild("HumanoidRootPart")
-                local pHum = p.Character:FindFirstChild("Humanoid")
-                if targetPart and pHum and pHum.Health > 0 then
-                    local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-                    if onScreen then
-                        local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                        if dist < shortestScreenDist then
-                            shortestScreenDist = dist
-                            closest = {Part = targetPart, Char = p.Character}
-                        end
-                    end
-                end
-            end
-        end
-    else
-        local enemies = workspace:FindFirstChild("Enemies")
-        if enemies then
-            for _, mob in pairs(enemies:GetChildren()) do
-                local targetPart = mob:FindFirstChild(_G.Config.TargetPart) or mob:FindFirstChild("HumanoidRootPart")
-                local mHum = mob:FindFirstChild("Humanoid")
-                if targetPart and mHum and mHum.Health > 0 then
-                    local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-                    if onScreen then
-                        local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                        if dist < shortestScreenDist then
-                            shortestScreenDist = dist
-                            closest = {Part = targetPart, Char = mob}
-                        end
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and not IsWhitelisted(p.Name) then
+            local part = p.Character:FindFirstChild(_G.Config.TargetPart) or p.Character:FindFirstChild("HumanoidRootPart")
+            local hum = p.Character:FindFirstChild("Humanoid")
+            if part and hum and hum.Health > 0 then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                if onScreen then
+                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                    if dist < shortestDist then
+                        shortestDist = dist
+                        closest = {Part = part, Char = p.Character}
                     end
                 end
             end
@@ -242,62 +181,34 @@ local function GetTargetUnderCursor(isPlayerTarget)
     return closest
 end
 
--- إعادة ضبط الـ Hitbox بعد فك التثبيت
-local function ResetPreviousHitbox()
-    if lockedTargetPart and originalPartProperties[lockedTargetPart] then
-        pcall(function()
-            lockedTargetPart.Size = originalPartProperties[lockedTargetPart].Size
-            lockedTargetPart.Transparency = originalPartProperties[lockedTargetPart].Transparency
-            lockedTargetPart.Color = originalPartProperties[lockedTargetPart].Color
-        end)
-    end
-    lockedTargetPart = nil
-    lockedTargetChar = nil
-end
-
--- الاستجابة للضغط على الأزرار (Toggle Target Lock)
+-- التحكم بالكبسات (Keybindings Handler)
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     pcall(function()
-        if input.KeyCode == Enum.KeyCode[_G.Config.PlayerAimbotKey] then
-            _G.Config.PlayerAimbot = not _G.Config.PlayerAimbot
-            _G.Config.MobAimbot = false
-            
-            if _G.Config.PlayerAimbot then
-                local found = GetTargetUnderCursor(true)
-                if found then
+        -- 1. زر الأيم بوت العادي (Normal Aimbot)
+        if input.KeyCode == Enum.KeyCode[_G.Config.NormalAimbotKey] then
+            _G.Config.NormalAimbot = not _G.Config.NormalAimbot
+            _G.Config.TargetLock = false
+            ResetPreviousHitbox()
+
+        -- 2. زر التثبيت المباشر على هدف (Target Lock)
+        elseif input.KeyCode == Enum.KeyCode[_G.Config.TargetLockKey] then
+            _G.Config.TargetLock = not _G.Config.TargetLock
+            _G.Config.NormalAimbot = false
+
+            if _G.Config.TargetLock then
+                local target = GetClosestTarget()
+                if target then
                     ResetPreviousHitbox()
-                    lockedTargetPart = found.Part
-                    lockedTargetChar = found.Char
-                    originalPartProperties[lockedTargetPart] = {
-                        Size = lockedTargetPart.Size,
-                        Transparency = lockedTargetPart.Transparency,
-                        Color = lockedTargetPart.Color
+                    currentLockedPart = target.Part
+                    currentLockedChar = target.Char
+                    originalPartProperties[currentLockedPart] = {
+                        Size = currentLockedPart.Size,
+                        Transparency = currentLockedPart.Transparency,
+                        Color = currentLockedPart.Color
                     }
                 else
-                    _G.Config.PlayerAimbot = false
-                end
-            else
-                ResetPreviousHitbox()
-            end
-
-        elseif input.KeyCode == Enum.KeyCode[_G.Config.MobAimbotKey] then
-            _G.Config.MobAimbot = not _G.Config.MobAimbot
-            _G.Config.PlayerAimbot = false
-
-            if _G.Config.MobAimbot then
-                local found = GetTargetUnderCursor(false)
-                if found then
-                    ResetPreviousHitbox()
-                    lockedTargetPart = found.Part
-                    lockedTargetChar = found.Char
-                    originalPartProperties[lockedTargetPart] = {
-                        Size = lockedTargetPart.Size,
-                        Transparency = lockedTargetPart.Transparency,
-                        Color = lockedTargetPart.Color
-                    }
-                else
-                    _G.Config.MobAimbot = false
+                    _G.Config.TargetLock = false
                 end
             else
                 ResetPreviousHitbox()
@@ -306,45 +217,54 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end)
 end)
 
--- الحلقة الرئيسية للتثبيت والتحكم بـ Hitbox
+-- الحلقة المباشرة لتحريك الكاميرا بسلاسة (RenderStepped Loop)
 RunService.RenderStepped:Connect(function()
-    if (_G.Config.PlayerAimbot or _G.Config.MobAimbot) and lockedTargetPart and lockedTargetPart.Parent then
-        local hum = lockedTargetChar:FindFirstChild("Humanoid")
-        if hum and hum.Health > 0 then
-            pcall(function()
-                -- تثبيت الكاميرا المباشر
-                Camera.CFrame = CFrame.new(Camera.CFrame.Position, lockedTargetPart.Position)
+    local targetToAim = nil
 
-                -- تكبير وتلوين الـ Hitbox باللون البنفسجي المخصص
+    -- وضع الأيم بوت العادي
+    if _G.Config.NormalAimbot then
+        local found = GetClosestTarget()
+        if found then targetToAim = found.Part end
+
+    -- وضع تثبيت الهدف (Target Lock)
+    elseif _G.Config.TargetLock and currentLockedPart and currentLockedChar then
+        local hum = currentLockedChar:FindFirstChild("Humanoid")
+        if hum and hum.Health > 0 then
+            targetToAim = currentLockedPart
+
+            -- تكبير وتلوين الـ Hitbox للهدف المثبت
+            pcall(function()
                 local tc = _G.Config.TargetColor
-                lockedTargetPart.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
-                lockedTargetPart.Color = Color3.fromRGB(tc.R, tc.G, tc.B)
-                lockedTargetPart.Transparency = 0.5
-                lockedTargetPart.CanCollide = false
+                currentLockedPart.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
+                currentLockedPart.Color = Color3.fromRGB(tc.R, tc.G, tc.B)
+                currentLockedPart.Transparency = 0.5
+                currentLockedPart.CanCollide = false
             end)
         else
-            -- إلغاء التثبيت في حال موت الهدف
-            _G.Config.PlayerAimbot = false
-            _G.Config.MobAimbot = false
+            _G.Config.TargetLock = false
             ResetPreviousHitbox()
         end
-    else
-        if lockedTargetPart then
-            ResetPreviousHitbox()
-        end
+    end
+
+    -- توجيه الكاميرا بسلاسة فائقة إذا وجد هدف
+    if targetToAim then
+        pcall(function()
+            local targetCFrame = CFrame.new(Camera.CFrame.Position, targetToAim.Position)
+            Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, _G.Config.Smoothness)
+        end)
     end
 end)
 
 -- ==========================================
--- 4. USER INTERFACE (GUI)
+-- 4. USER INTERFACE (GUI WITH PVP ICON)
 -- ==========================================
 
-if CoreGui:FindFirstChild("BloxFruitsUltraHubUI") then
-    CoreGui.BloxFruitsUltraHubUI:Destroy()
+if CoreGui:FindFirstChild("PvpUltraHubUI") then
+    CoreGui.PvpUltraHubUI:Destroy()
 end
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "BloxFruitsUltraHubUI"
+ScreenGui.Name = "PvpUltraHubUI"
 ScreenGui.Parent = CoreGui
 
 local MainFrame = Instance.new("Frame")
@@ -361,7 +281,7 @@ MainCorner.CornerRadius = UDim.new(0, 10)
 MainCorner.Parent = MainFrame
 
 local MainStroke = Instance.new("UIStroke")
-MainStroke.Color = Color3.fromRGB(0, 180, 255)
+MainStroke.Color = Color3.fromRGB(255, 45, 85)
 MainStroke.Thickness = 1.5
 MainStroke.Parent = MainFrame
 
@@ -380,11 +300,11 @@ SideLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 SideLayout.Parent = Sidebar
 
 local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Size = UDim2.new(1, 0, 0, 42)
-TitleLabel.Text = "⚡ ULTRA COMBAT"
-TitleLabel.TextColor3 = Color3.fromRGB(0, 180, 255)
+TitleLabel.Size = UDim2.new(1, 0, 0, 45)
+TitleLabel.Text = "⚔️ PVP ULTRA"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 45, 85)
 TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.TextSize = 11
+TitleLabel.TextSize = 12
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Parent = Sidebar
 
@@ -395,11 +315,11 @@ ContentArea.BackgroundTransparency = 1
 ContentArea.Parent = MainFrame
 
 local ToggleBtn = Instance.new("TextButton")
-ToggleBtn.Size = UDim2.new(0, 85, 0, 30)
+ToggleBtn.Size = UDim2.new(0, 100, 0, 32)
 ToggleBtn.Position = UDim2.new(0.02, 0, 0.05, 0)
 ToggleBtn.BackgroundColor3 = Color3.fromRGB(18, 21, 32)
-ToggleBtn.Text = "TOGGLE MENU"
-ToggleBtn.TextColor3 = Color3.fromRGB(0, 180, 255)
+ToggleBtn.Text = "⚔️ PVP MENU"
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 45, 85)
 ToggleBtn.Font = Enum.Font.GothamBold
 ToggleBtn.TextSize = 9
 ToggleBtn.Parent = ScreenGui
@@ -450,8 +370,8 @@ local function CreateTab(tabName)
             t.Btn.BackgroundColor3 = Color3.fromRGB(26, 31, 46)
         end
         TabPage.Visible = true
-        TabBtn.TextColor3 = Color3.fromRGB(0, 180, 255)
-        TabBtn.BackgroundColor3 = Color3.fromRGB(35, 45, 68)
+        TabBtn.TextColor3 = Color3.fromRGB(255, 45, 85)
+        TabBtn.BackgroundColor3 = Color3.fromRGB(45, 25, 38)
     end)
 
     table.insert(tabs, {Btn = TabBtn, Page = TabPage})
@@ -476,7 +396,7 @@ local function AddToggle(parentPage, name, configVar)
     local Indicator = Instance.new("Frame")
     Indicator.Size = UDim2.new(0, 26, 0, 14)
     Indicator.Position = UDim2.new(1, -32, 0.5, -7)
-    Indicator.BackgroundColor3 = _G.Config[configVar] and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(45, 50, 65)
+    Indicator.BackgroundColor3 = _G.Config[configVar] and Color3.fromRGB(255, 45, 85) or Color3.fromRGB(45, 50, 65)
     Indicator.Parent = Button
 
     local IndCorner = Instance.new("UICorner")
@@ -486,7 +406,7 @@ local function AddToggle(parentPage, name, configVar)
     Button.MouseButton1Click:Connect(function()
         _G.Config[configVar] = not _G.Config[configVar]
         if not _G.Config[configVar] then ResetPreviousHitbox() end
-        Indicator.BackgroundColor3 = _G.Config[configVar] and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(45, 50, 65)
+        Indicator.BackgroundColor3 = _G.Config[configVar] and Color3.fromRGB(255, 45, 85) or Color3.fromRGB(45, 50, 65)
         Button.TextColor3 = _G.Config[configVar] and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(160, 160, 160)
     end)
     return Button
@@ -515,9 +435,9 @@ local function AddKeybindPicker(parentPage, name, configVar)
     local BindBtn = Instance.new("TextButton")
     BindBtn.Size = UDim2.new(0.35, 0, 0.7, 0)
     BindBtn.Position = UDim2.new(0.62, 0, 0.15, 0)
-    BindBtn.BackgroundColor3 = Color3.fromRGB(35, 45, 68)
+    BindBtn.BackgroundColor3 = Color3.fromRGB(45, 25, 38)
     BindBtn.Text = "[" .. tostring(_G.Config[configVar]) .. "]"
-    BindBtn.TextColor3 = Color3.fromRGB(0, 180, 255)
+    BindBtn.TextColor3 = Color3.fromRGB(255, 45, 85)
     BindBtn.Font = Enum.Font.GothamBold
     BindBtn.TextSize = 9
     BindBtn.Parent = Frame
@@ -536,216 +456,23 @@ local function AddKeybindPicker(parentPage, name, configVar)
     end)
 end
 
-local function AddDropdown(parentPage, title, optionsList, configVar)
-    local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(0.96, 0, 0, 32)
-    Frame.BackgroundColor3 = Color3.fromRGB(22, 26, 38)
-    Frame.Parent = parentPage
-
-    local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 6)
-    Corner.Parent = Frame
-
-    local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(0.45, 0, 1, 0)
-    Label.Text = "  " .. title
-    Label.TextColor3 = Color3.fromRGB(200, 200, 200)
-    Label.Font = Enum.Font.GothamMedium
-    Label.TextSize = 9
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.BackgroundTransparency = 1
-    Label.Parent = Frame
-
-    local DropBtn = Instance.new("TextButton")
-    DropBtn.Size = UDim2.new(0.50, 0, 0.7, 0)
-    DropBtn.Position = UDim2.new(0.47, 0, 0.15, 0)
-    DropBtn.BackgroundColor3 = Color3.fromRGB(35, 45, 68)
-    DropBtn.Text = tostring(_G.Config[configVar])
-    DropBtn.TextColor3 = Color3.fromRGB(0, 180, 255)
-    DropBtn.Font = Enum.Font.GothamBold
-    DropBtn.TextSize = 8
-    DropBtn.Parent = Frame
-
-    local idx = 1
-    for i, opt in ipairs(optionsList) do
-        if opt == _G.Config[configVar] then idx = i break end
-    end
-
-    DropBtn.MouseButton1Click:Connect(function()
-        idx = (idx % #optionsList) + 1
-        _G.Config[configVar] = optionsList[idx]
-        DropBtn.Text = optionsList[idx]
-    end)
-end
-
--- إضافة خيار تخصيص ألوان التثبيت والـ Hitbox
-local function AddColorPickerDropdown(parentPage, title, colorConfigVar)
-    local colors = {
-        ["Purple 💜"] = {R = 170, G = 0, B = 255},
-        ["Cyan 🩵"]   = {R = 0, G = 225, B = 255},
-        ["Red 🔴"]    = {R = 255, G = 40, B = 40},
-        ["Green 🟢"]  = {R = 0, G = 255, B = 100},
-        ["Yellow 🟡"] = {R = 255, G = 220, B = 0}
-    }
-    local colorNames = {"Purple 💜", "Cyan 🩵", "Red 🔴", "Green 🟢", "Yellow 🟡"}
-
-    local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(0.96, 0, 0, 32)
-    Frame.BackgroundColor3 = Color3.fromRGB(22, 26, 38)
-    Frame.Parent = parentPage
-
-    local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 6)
-    Corner.Parent = Frame
-
-    local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(0.45, 0, 1, 0)
-    Label.Text = "  " .. title
-    Label.TextColor3 = Color3.fromRGB(200, 200, 200)
-    Label.Font = Enum.Font.GothamMedium
-    Label.TextSize = 9
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.BackgroundTransparency = 1
-    Label.Parent = Frame
-
-    local DropBtn = Instance.new("TextButton")
-    DropBtn.Size = UDim2.new(0.50, 0, 0.7, 0)
-    DropBtn.Position = UDim2.new(0.47, 0, 0.15, 0)
-    DropBtn.BackgroundColor3 = Color3.fromRGB(35, 45, 68)
-    DropBtn.Text = "Purple 💜"
-    DropBtn.TextColor3 = Color3.fromRGB(170, 0, 255)
-    DropBtn.Font = Enum.Font.GothamBold
-    DropBtn.TextSize = 8
-    DropBtn.Parent = Frame
-
-    local idx = 1
-    DropBtn.MouseButton1Click:Connect(function()
-        idx = (idx % #colorNames) + 1
-        local selectedName = colorNames[idx]
-        _G.Config[colorConfigVar] = colors[selectedName]
-        DropBtn.Text = selectedName
-        local c = colors[selectedName]
-        DropBtn.TextColor3 = Color3.fromRGB(c.R, c.G, c.B)
-    end)
-end
-
-local function AddListManager(parentPage, title, listTable)
-    local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(0.96, 0, 0, 75)
-    Frame.BackgroundColor3 = Color3.fromRGB(22, 26, 38)
-    Frame.Parent = parentPage
-
-    local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 6)
-    Corner.Parent = Frame
-
-    local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(1, -10, 0, 20)
-    Label.Position = UDim2.new(0, 5, 0, 2)
-    Label.Text = title
-    Label.TextColor3 = Color3.fromRGB(0, 180, 255)
-    Label.Font = Enum.Font.GothamBold
-    Label.TextSize = 9
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.BackgroundTransparency = 1
-    Label.Parent = Frame
-
-    local TextBox = Instance.new("TextBox")
-    TextBox.Size = UDim2.new(0.55, 0, 0, 24)
-    TextBox.Position = UDim2.new(0.03, 0, 0.35, 0)
-    TextBox.BackgroundColor3 = Color3.fromRGB(15, 18, 26)
-    TextBox.Text = ""
-    TextBox.PlaceholderText = "Player Name..."
-    TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-    TextBox.Font = Enum.Font.GothamMedium
-    TextBox.TextSize = 8
-    TextBox.Parent = Frame
-
-    local tbCorner = Instance.new("UICorner")
-    tbCorner.CornerRadius = UDim.new(0, 4)
-    tbCorner.Parent = TextBox
-
-    local AddBtn = Instance.new("TextButton")
-    AddBtn.Size = UDim2.new(0.18, 0, 0, 24)
-    AddBtn.Position = UDim2.new(0.60, 0, 0.35, 0)
-    AddBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
-    AddBtn.Text = "Add"
-    AddBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    AddBtn.Font = Enum.Font.GothamBold
-    AddBtn.TextSize = 8
-    AddBtn.Parent = Frame
-
-    local RemoveBtn = Instance.new("TextButton")
-    RemoveBtn.Size = UDim2.new(0.18, 0, 0, 24)
-    RemoveBtn.Position = UDim2.new(0.79, 0, 0.35, 0)
-    RemoveBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
-    RemoveBtn.Text = "Remove"
-    RemoveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    RemoveBtn.Font = Enum.Font.GothamBold
-    RemoveBtn.TextSize = 8
-    RemoveBtn.Parent = Frame
-
-    local StatusLabel = Instance.new("TextLabel")
-    StatusLabel.Size = UDim2.new(1, -10, 0, 15)
-    StatusLabel.Position = UDim2.new(0, 5, 0.75, 0)
-    StatusLabel.Text = "List: " .. table.concat(listTable, ", ")
-    StatusLabel.TextColor3 = Color3.fromRGB(150, 160, 175)
-    StatusLabel.Font = Enum.Font.GothamMedium
-    StatusLabel.TextSize = 8
-    StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
-    StatusLabel.BackgroundTransparency = 1
-    StatusLabel.Parent = Frame
-
-    AddBtn.MouseButton1Click:Connect(function()
-        local name = TextBox.Text:match("^%s*(.-)%s*$")
-        if name ~= "" then
-            local exists = false
-            for _, v in ipairs(listTable) do
-                if v:lower() == name:lower() then exists = true; break end
-            end
-            if not exists then
-                table.insert(listTable, name)
-                StatusLabel.Text = "List: " .. table.concat(listTable, ", ")
-                TextBox.Text = ""
-            end
-        end
-    end)
-
-    RemoveBtn.MouseButton1Click:Connect(function()
-        local name = TextBox.Text:match("^%s*(.-)%s*$")
-        if name ~= "" then
-            for idx, v in ipairs(listTable) do
-                if v:lower() == name:lower() then
-                    table.remove(listTable, idx)
-                    StatusLabel.Text = "List: " .. table.concat(listTable, ", ")
-                    TextBox.Text = ""
-                    break
-                end
-            end
-        end
-    end)
-end
-
 -- ==========================================
--- TABS SETUP
+-- TABS CREATION
 -- ==========================================
 
-local CombatTab = CreateTab("⚔️ Combat & Aimbot")
-local VisualsTab = CreateTab("👁️ Health & UI")
+local CombatTab = CreateTab("⚔️ PVP Controls")
+local SettingsTab = CreateTab("⚙️ Visuals")
 
 tabs[1].Page.Visible = true
-tabs[1].Btn.TextColor3 = Color3.fromRGB(0, 180, 255)
+tabs[1].Btn.TextColor3 = Color3.fromRGB(255, 45, 85)
 
--- Combat Options
-AddToggle(CombatTab, "Player Target Lock", "PlayerAimbot")
-AddKeybindPicker(CombatTab, "Player Lock Key", "PlayerAimbotKey")
-AddToggle(CombatTab, "Mob Target Lock", "MobAimbot")
-AddKeybindPicker(CombatTab, "Mob Lock Key", "MobAimbotKey")
+-- 1. التحكم بـ Normal Aimbot
+AddToggle(CombatTab, "Normal Aimbot (Auto)", "NormalAimbot")
+AddKeybindPicker(CombatTab, "Aimbot Key", "NormalAimbotKey")
 
-AddListManager(CombatTab, "🛡️ Whitelist", _G.Config.Whitelist)
-AddListManager(CombatTab, "🎯 Target List", _G.Config.TargetList)
+-- 2. التحكم بـ Target Lock
+AddToggle(CombatTab, "Target Lock (Manual)", "TargetLock")
+AddKeybindPicker(CombatTab, "Target Lock Key", "TargetLockKey")
 
--- Visual Options
-AddToggle(VisualsTab, "Show Health Overlay", "ShowHealth")
-AddDropdown(VisualsTab, "Health Style", {"Modern Card", "Classic Bar", "Text Only"}, "HealthStyle")
-AddColorPickerDropdown(VisualsTab, "Target Hitbox Color", "TargetColor")
+-- Visuals
+AddToggle(SettingsTab, "Show PVP Health Bar", "ShowHealth")
