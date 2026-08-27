@@ -22,6 +22,10 @@ _G.Config = {
     
     TargetPart = "Head",
     HitboxSize = 18,
+    
+    -- New Hitbox Circle Configs
+    HitboxCircleEnabled = true,
+    HitboxCircleRadius = 5, -- حجم الدائرة المحيطة باللاعب
 
     ShowHealth = true,
     HealthStyle = "Modern Card",
@@ -280,7 +284,77 @@ end
 task.spawn(HookEnemies)
 
 -- ==========================================
--- 3. HARD LOCK AIMBOT ENGINE
+-- 3. OPTIMIZED HITBOX & CIRCLE ENGINE (NO LAG)
+-- ==========================================
+
+local function ManageHitboxAndCircle(character, isPlayer)
+    local rootPart = character:WaitForChild("HumanoidRootPart", 3)
+    local humanoid = character:WaitForChild("Humanoid", 3)
+    if not rootPart or not humanoid then return end
+
+    -- إنشاء أو إدارة جزء الدائرة الأرضية (Hitbox Circle Part)
+    local circlePart = character:FindFirstChild("HitboxCirclePart")
+    if not circlePart then
+        circlePart = Instance.new("Part")
+        circlePart.Name = "HitboxCirclePart"
+        circlePart.Shape = Enum.PartType.Cylinder
+        circlePart.Size = Vector3.new(0.5, 1, 1) -- سيتم تحديث الحجم لاحقاً
+        circlePart.Transparency = 0.85
+        circlePart.BrickColor = BrickColor.new("Cyan")
+        circlePart.Material = Enum.Material.Neon
+        circlePart.CanCollide = false
+        circlePart.Anchored = false
+        circlePart.Massless = true
+        circlePart.Parent = character
+
+        local weld = Instance.new("WeldConstraint")
+        weld.Part0 = rootPart
+        weld.Part1 = circlePart
+        weld.Parent = circlePart
+    end
+
+    -- تحديث دوري خفيف جداً لتجنب اللاغ (RunService مع تأخير أو تحديث ذكي)
+    task.spawn(function()
+        while character and character.Parent and humanoid.Health > 0 do
+            if _G.Config.HitboxCircleEnabled then
+                circlePart.Transparency = 0.75
+                local sz = _G.Config.HitboxCircleRadius * 2
+                circlePart.Size = Vector3.new(0.4, sz, sz)
+                -- جعل الدائرة مستلقية على الأرض تحت اللاعب مباشرة
+                circlePart.CFrame = rootPart.CFrame * CFrame.Angles(0, 0, math.rad(90))
+            else
+                circlePart.Transparency = 1
+            end
+
+            -- تعديل حجم الهيت بوكس الأساسي (مثل الـ Head أو RootPart حسب الاختيار)
+            local targetP = character:FindFirstChild(_G.Config.TargetPart) or rootPart
+            if targetP then
+                pcall(function()
+                    targetP.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
+                    targetP.Transparency = 0.7
+                    targetP.CanCollide = false
+                end)
+            end
+            task.wait(0.5) -- تحديث كل نصف ثانية لضمان عدم حدوث أي lag نهائياً
+        end
+        if circlePart then circlePart:Destroy() end
+    end)
+end
+
+-- تطبيق نظام الهيت بوكس والدائرة على اللاعبين
+for _, p in pairs(Players:GetPlayers()) do
+    if p ~= LocalPlayer then
+        if p.Character then task.spawn(function() ManageHitboxAndCircle(p.Character, true) end) end
+        p.CharacterAdded:Connect(function(c) task.spawn(function() ManageHitboxAndCircle(c, true) end) end)
+    end
+end
+Players.PlayerAdded:Connect(function(p)
+    p.CharacterAdded:Connect(function(c) task.spawn(function() ManageHitboxAndCircle(c, true) end) end)
+end)
+
+
+-- ==========================================
+-- 4. HARD LOCK AIMBOT ENGINE
 -- ==========================================
 
 local function IsWhitelisted(name)
@@ -349,9 +423,6 @@ RunService.RenderStepped:Connect(function()
         if lockedTargetPart and lockedTargetPart.Parent then
             pcall(function()
                 Camera.CFrame = CFrame.new(Camera.CFrame.Position, lockedTargetPart.Position)
-                lockedTargetPart.Size = Vector3.new(_G.Config.HitboxSize, _G.Config.HitboxSize, _G.Config.HitboxSize)
-                lockedTargetPart.Transparency = 0.7
-                lockedTargetPart.CanCollide = false
             end)
         end
     else
@@ -373,7 +444,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 end)
 
 -- ==========================================
--- 4. GUI ENGINE WITH DYNAMIC THEMES
+-- 5. GUI ENGINE WITH DYNAMIC THEMES
 -- ==========================================
 
 if CoreGui:FindFirstChild("PvpCombatHubUI") then
@@ -562,6 +633,78 @@ local function AddToggle(parentPage, name, configVar, callback)
         if callback then callback() end
     end)
     return Button
+end
+
+local function AddSlider(parentPage, title, min, max, configVar, callback)
+    local Frame = Instance.new("Frame")
+    Frame.Size = UDim2.new(0.96, 0, 0, 45)
+    Frame.Parent = parentPage
+
+    local Corner = Instance.new("UICorner")
+    Corner.Parent = Frame
+
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -10, 0, 20)
+    Label.Position = UDim2.new(0, 5, 0, 2)
+    Label.Text = title .. ": " .. tostring(_G.Config[configVar])
+    Label.Font = Enum.Font.GothamBold
+    Label.TextSize = 9
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.BackgroundTransparency = 1
+    Label.Parent = Frame
+
+    local SliderBar = Instance.new("TextButton")
+    SliderBar.Size = UDim2.new(0.9, 0, 0, 10)
+    SliderBar.Position = UDim2.new(0.05, 0, 0.65, 0)
+    SliderBar.Text = ""
+    SliderBar.AutoButtonColor = false
+    SliderBar.Parent = Frame
+
+    local BarCorner = Instance.new("UICorner")
+    BarCorner.CornerRadius = UDim.new(1, 0)
+    BarCorner.Parent = SliderBar
+
+    local Fill = Instance.new("Frame")
+    Fill.Size = UDim2.new((_G.Config[configVar] - min) / (max - min), 0, 1, 0)
+    Fill.BorderSizePixel = 0
+    Fill.Parent = SliderBar
+
+    local FillCorner = Instance.new("UICorner")
+    FillCorner.CornerRadius = UDim.new(1, 0)
+    FillCorner.Parent = Fill
+
+    local function UpdateSliderStyle(theme)
+        Corner.CornerRadius = UDim.new(0, math.max(4, theme.CornerRadius - 4))
+        Frame.BackgroundColor3 = theme.CardBg
+        Label.TextColor3 = theme.Text
+        SliderBar.BackgroundColor3 = theme.SidebarBg
+        Fill.BackgroundColor3 = theme.Accent
+    end
+    table.insert(ThemeUpdateSignals, UpdateSliderStyle)
+
+    local dragging = false
+    SliderBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local pos = math.clamp((input.Position.X - SliderBar.AbsolutePosition.X) / SliderBar.AbsoluteSize.X, 0, 1)
+            local val = math.floor(min + ((max - min) * pos))
+            _G.Config[configVar] = val
+            Fill.Size = UDim2.new(pos, 0, 1, 0)
+            Label.Text = title .. ": " .. tostring(val)
+            if callback then callback() end
+        end
+    end)
 end
 
 local function AddKeybindPicker(parentPage, name, configVar)
@@ -783,12 +926,15 @@ AddToggle(CombatTab, "Player Camera Aimbot", "PlayerAimbot")
 AddKeybindPicker(CombatTab, "Player Aimbot Key", "PlayerAimbotKey")
 AddToggle(CombatTab, "Mob Camera Aimbot", "MobAimbot")
 AddKeybindPicker(CombatTab, "Mob Aimbot Key", "MobAimbotKey")
+AddSlider(CombatTab, "Hitbox Size", 2, 40, "HitboxSize")
+AddToggle(CombatTab, "Ground Hitbox Circle", "HitboxCircleEnabled")
+AddSlider(CombatTab, "Circle Radius", 2, 20, "HitboxCircleRadius")
 AddListManager(CombatTab, "🛡️ Whitelist", _G.Config.Whitelist)
 AddListManager(CombatTab, "🎯 Target List", _G.Config.TargetList)
 
 -- Visuals Tab
 AddToggle(VisualsTab, "Show Health Overlay", "ShowHealth", RefreshAllHealthUI)
-AddDropdown(VisualsTab, "Health Style", {"Modern Card", "Classic Bar", "Text Only", "Gradient Bar", "Compact Line"}, "HealthStyle", RefreshAllHealthUI)
+AddDropdown(VisualsTab, "HealthStyle", {"Modern Card", "Classic Bar", "Text Only", "Gradient Bar", "Compact Line"}, "HealthStyle", RefreshAllHealthUI)
 
 -- Settings / Themes Tab
 AddDropdown(SettingsTab, "UI Theme Model", {"Cyber Dark", "Midnight Purple", "Emerald Neon", "Crimson Red", "Minimal Light"}, "CurrentTheme", ApplyTheme)
