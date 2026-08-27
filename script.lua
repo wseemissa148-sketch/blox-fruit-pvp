@@ -23,9 +23,9 @@ _G.Config = {
     TargetPart = "Head",
     HitboxSize = 18,
     
-    -- New Hitbox Circle Configs
+    -- Hitbox Circle Configs
     HitboxCircleEnabled = true,
-    HitboxCircleRadius = 5, -- حجم الدائرة المحيطة باللاعب
+    HitboxCircleRadius = 5,
 
     ShowHealth = true,
     HealthStyle = "Modern Card",
@@ -284,7 +284,7 @@ end
 task.spawn(HookEnemies)
 
 -- ==========================================
--- 3. OPTIMIZED HITBOX & CIRCLE ENGINE (NO LAG)
+-- 3. OPTIMIZED HITBOX & SEPARATE CIRCLE HITBOX (NO LAG)
 -- ==========================================
 
 local function ManageHitboxAndCircle(character, isPlayer)
@@ -292,16 +292,17 @@ local function ManageHitboxAndCircle(character, isPlayer)
     local humanoid = character:WaitForChild("Humanoid", 3)
     if not rootPart or not humanoid then return end
 
-    -- إنشاء أو إدارة جزء الدائرة الأرضية (Hitbox Circle Part)
+    -- جزء دائرة منفصل يعمل كهيت بوكس حقيقي حول اللاعب على الأرض (قابل للضرب)
     local circlePart = character:FindFirstChild("HitboxCirclePart")
     if not circlePart then
         circlePart = Instance.new("Part")
         circlePart.Name = "HitboxCirclePart"
         circlePart.Shape = Enum.PartType.Cylinder
-        circlePart.Size = Vector3.new(0.5, 1, 1) -- سيتم تحديث الحجم لاحقاً
         circlePart.Transparency = 0.85
         circlePart.BrickColor = BrickColor.new("Cyan")
         circlePart.Material = Enum.Material.Neon
+        circlePart.CanQuery = true
+        circlePart.CanTouch = true
         circlePart.CanCollide = false
         circlePart.Anchored = false
         circlePart.Massless = true
@@ -313,20 +314,21 @@ local function ManageHitboxAndCircle(character, isPlayer)
         weld.Parent = circlePart
     end
 
-    -- تحديث دوري خفيف جداً لتجنب اللاغ (RunService مع تأخير أو تحديث ذكي)
+    -- تحديث خفيف ومنظم لمنع اللاغ نهائياً
     task.spawn(function()
         while character and character.Parent and humanoid.Health > 0 do
             if _G.Config.HitboxCircleEnabled then
                 circlePart.Transparency = 0.75
                 local sz = _G.Config.HitboxCircleRadius * 2
+                -- جعل الدائرة بالحجم المطلوب ومسطحة على الأرض تحت اللاعب تماماً دون التأثير على هيت بوكس الجسم الأصلي
                 circlePart.Size = Vector3.new(0.4, sz, sz)
-                -- جعل الدائرة مستلقية على الأرض تحت اللاعب مباشرة
-                circlePart.CFrame = rootPart.CFrame * CFrame.Angles(0, 0, math.rad(90))
+                circlePart.CFrame = rootPart.CFrame * CFrame.new(0, -2, 0) * CFrame.Angles(0, 0, math.rad(90))
             else
                 circlePart.Transparency = 1
+                circlePart.Size = Vector3.new(0.1, 0.1, 0.1)
             end
 
-            -- تعديل حجم الهيت بوكس الأساسي (مثل الـ Head أو RootPart حسب الاختيار)
+            -- تعديل الهيت بوكس الأساسي للاعب (الرأس أو الجزء المستهدف)
             local targetP = character:FindFirstChild(_G.Config.TargetPart) or rootPart
             if targetP then
                 pcall(function()
@@ -335,13 +337,12 @@ local function ManageHitboxAndCircle(character, isPlayer)
                     targetP.CanCollide = false
                 end)
             end
-            task.wait(0.5) -- تحديث كل نصف ثانية لضمان عدم حدوث أي lag نهائياً
+            task.wait(0.5)
         end
         if circlePart then circlePart:Destroy() end
     end)
 end
 
--- تطبيق نظام الهيت بوكس والدائرة على اللاعبين
 for _, p in pairs(Players:GetPlayers()) do
     if p ~= LocalPlayer then
         if p.Character then task.spawn(function() ManageHitboxAndCircle(p.Character, true) end) end
