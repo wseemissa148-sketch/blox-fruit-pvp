@@ -1,5 +1,5 @@
 -- ==========================================================
--- ⚔️ PVP COMBAT HUB (Xeno Executor & GitHub Ready) - PERFECT MERGE
+-- ⚔️ PVP COMBAT HUB (Optimized & No Race Bar)
 -- ==========================================================
 
 local Players = game:GetService("Players")
@@ -21,7 +21,7 @@ _G.Config = {
     MobAimbotKey = "H",
     
     AimbotSmoothness = 0.25,
-    DisableAtHealth = 3000, -- [جديد] يتوقف الأيمبوت إذا وصل الدم لهذا الرقم
+    DisableAtHealth = 3000,
     
     TargetPart = "Head",
     HitboxSize = 18,
@@ -49,7 +49,7 @@ local lockedTargetPart = nil
 local ThemeUpdateSignals = {}
 
 -- ==========================================
--- 2. HEALTH & RACE OVERLAY ENGINE
+-- 2. HEALTH OVERLAY ENGINE (No Lag / No RenderStepped Connections)
 -- ==========================================
 
 local function RemoveHealthUI(character)
@@ -73,7 +73,7 @@ local function CreateHealthUI(character, isPlayer)
     local bb = Instance.new("BillboardGui")
     bb.Name = "HealthUIOverlay"
     bb.Adornee = head
-    bb.Size = UDim2.new(0, 140, 0, 45) -- [جديد] تم التكبير ليتسع لشريط الريس
+    bb.Size = UDim2.new(0, 140, 0, 30) -- تصغير الحجم لعدم الحاجة لمساحة إضافية
     bb.StudsOffset = Vector3.new(0, 3, 0)
     bb.AlwaysOnTop = true
     bb.MaxDistance = math.huge
@@ -91,38 +91,21 @@ local function CreateHealthUI(character, isPlayer)
         local bg = Instance.new("Frame"); bg.Size = UDim2.new(1, 0, 0, 8); bg.Position = UDim2.new(0, 0, 0.5, -4); bg.BackgroundColor3 = Color3.fromRGB(20, 20, 20); bg.BorderSizePixel = 0; bg.Parent = bb
         local fill = Instance.new("Frame"); fill.Size = UDim2.new(math.clamp(hum.Health / math.max(1, hum.MaxHealth), 0, 1), 0, 1, 0); fill.BackgroundColor3 = mainColor; fill.BorderSizePixel = 0; fill.Parent = bg
         hum.HealthChanged:Connect(function() fill.Size = UDim2.new(math.clamp(hum.Health / math.max(1, hum.MaxHealth), 0, 1), 0, 1, 0) end)
-    elseif _G.Config.HealthStyle == "Modern Card" then
+    else -- Modern Card (بدون أي حلقات تستهلك المعالج)
         local card = Instance.new("Frame"); card.Size = UDim2.new(1, 0, 1, 0); card.BackgroundColor3 = Color3.fromRGB(15, 18, 26); card.BackgroundTransparency = 0.2; card.Parent = bb
         local cCorner = Instance.new("UICorner"); cCorner.CornerRadius = UDim.new(0, 6); cCorner.Parent = card
         local title = Instance.new("TextLabel"); title.Size = UDim2.new(1, -10, 0, 14); title.Position = UDim2.new(0, 5, 0, 2); title.BackgroundTransparency = 1; title.Text = (isPlayer and "👤 " or "👾 ") .. character.Name; title.TextColor3 = Color3.fromRGB(240, 240, 240); title.Font = Enum.Font.GothamBold; title.TextSize = 9; title.TextXAlignment = Enum.TextXAlignment.Left; title.Parent = card
         
-        -- Health Bar
         local bg = Instance.new("Frame"); bg.Size = UDim2.new(1, -10, 0, 6); bg.Position = UDim2.new(0, 5, 0, 18); bg.BackgroundColor3 = Color3.fromRGB(35, 40, 55); bg.BorderSizePixel = 0; bg.Parent = card
         local bgCorner = Instance.new("UICorner"); bgCorner.CornerRadius = UDim.new(0, 4); bgCorner.Parent = bg
         local fill = Instance.new("Frame"); fill.Size = UDim2.new(math.clamp(hum.Health / math.max(1, hum.MaxHealth), 0, 1), 0, 1, 0); fill.BackgroundColor3 = mainColor; fill.BorderSizePixel = 0; fill.Parent = bg
         local fillCorner = Instance.new("UICorner"); fillCorner.CornerRadius = UDim.new(0, 4); fillCorner.Parent = fill
-        
-        -- [جديد] Race / Energy Bar
-        local raceBg = Instance.new("Frame"); raceBg.Size = UDim2.new(1, -10, 0, 4); raceBg.Position = UDim2.new(0, 5, 0, 28); raceBg.BackgroundColor3 = Color3.fromRGB(35, 30, 55); raceBg.BorderSizePixel = 0; raceBg.Parent = card
-        local rBgCorner = Instance.new("UICorner"); rBgCorner.CornerRadius = UDim.new(0, 4); rBgCorner.Parent = raceBg
-        local raceFill = Instance.new("Frame"); raceFill.Size = UDim2.new(0, 0, 1, 0); raceFill.BackgroundColor3 = Color3.fromRGB(170, 0, 255); raceFill.BorderSizePixel = 0; raceFill.Parent = raceBg
-        local rFillCorner = Instance.new("UICorner"); rFillCorner.CornerRadius = UDim.new(0, 4); rFillCorner.Parent = raceFill
 
-        local function UpdateBars()
-            if not hum or not hum.Parent then return end
-            fill.Size = UDim2.new(math.clamp(hum.Health / math.max(1, hum.MaxHealth), 0, 1), 0, 1, 0)
-            
-            local maxRace, currentRace = 100, 0
-            local energyObj = character:FindFirstChild("Energy") or character:FindFirstChild("RaceMeter") or character:FindFirstChild("Awakening")
-            if energyObj and (energyObj:IsA("NumberValue") or energyObj:IsA("IntValue")) then
-                currentRace = energyObj.Value
-                local maxObj = character:FindFirstChild("MaxEnergy") or character:FindFirstChild("MaxRaceMeter")
-                if maxObj then maxRace = maxObj.Value else maxRace = math.max(currentRace, 100) end
+        hum.HealthChanged:Connect(function()
+            if hum and hum.Parent then
+                fill.Size = UDim2.new(math.clamp(hum.Health / math.max(1, hum.MaxHealth), 0, 1), 0, 1, 0)
             end
-            raceFill.Size = UDim2.new(math.clamp(currentRace / maxRace, 0, 1), 0, 1, 0)
-        end
-        hum.HealthChanged:Connect(UpdateBars)
-        RunService.RenderStepped:Connect(function() if bb and bb.Parent then pcall(UpdateBars) end end)
+        end)
     end
     hum.Died:Connect(function() bb:Destroy() end)
 end
@@ -175,7 +158,6 @@ local function GetClosestToCamera(isPlayerTarget)
         if char then
             local targetPart = char:FindFirstChild(_G.Config.TargetPart) or char:FindFirstChild("HumanoidRootPart")
             local hum = char:FindFirstChild("Humanoid")
-            -- [جديد] يتوقف عن الاستهداف إذا كان الدم أقل من الحد المطلوب
             if targetPart and hum and hum.Health > _G.Config.DisableAtHealth then
                 if isPlayerTarget and pName then
                     if IsWhitelisted(pName) or not IsTargeted(pName) then return end
@@ -203,7 +185,6 @@ end
 RunService.RenderStepped:Connect(function()
     local isAimbotActive = _G.Config.PlayerAimbot or _G.Config.MobAimbot
     if isAimbotActive then
-        -- [جديد] تفريغ الهدف إذا مات أو نزل دمه عن الحد
         if lockedTargetPart and lockedTargetPart.Parent then
             local hum = lockedTargetPart.Parent:FindFirstChild("Humanoid")
             if not hum or hum.Health <= _G.Config.DisableAtHealth then lockedTargetPart = nil end
@@ -283,7 +264,6 @@ local function CreateTab(tabName)
     return TabPage
 end
 
--- الأزرار الأصلية بالكامل:
 local function AddToggle(parentPage, name, configVar, callback)
     local Button = Instance.new("TextButton"); Button.Size = UDim2.new(0.96, 0, 0, 32); Button.Text = "  " .. name; Button.Font = Enum.Font.GothamMedium; Button.TextSize = 9; Button.TextXAlignment = Enum.TextXAlignment.Left; Button.Parent = parentPage
     local BtnCorner = Instance.new("UICorner"); BtnCorner.Parent = Button
@@ -317,7 +297,6 @@ local function AddDropdown(parentPage, title, optionsList, configVar, callback)
     DropBtn.MouseButton1Click:Connect(function() idx = (idx % #optionsList) + 1; _G.Config[configVar] = optionsList[idx]; DropBtn.Text = tostring(optionsList[idx]); if callback then callback() end end)
 end
 
--- [جديد] زر إدخال الأرقام بشكل نظيف للتحكم بالدم
 local function AddNumberInput(parentPage, title, configVar)
     local Frame = Instance.new("Frame"); Frame.Size = UDim2.new(0.96, 0, 0, 32); Frame.Parent = parentPage
     local Corner = Instance.new("UICorner"); Corner.Parent = Frame
@@ -353,21 +332,18 @@ local VisualsTab = CreateTab("👁️ Health & UI")
 local SettingsTab = CreateTab("🎨 UI Themes")
 tabs[1].Page.Visible = true
 
--- Combat Tab (الآن عادت القوائم المنسدلة كما كانت)
 AddToggle(CombatTab, "Player Camera Aimbot", "PlayerAimbot")
 AddKeybindPicker(CombatTab, "Player Aimbot Key", "PlayerAimbotKey")
 AddToggle(CombatTab, "Mob Camera Aimbot", "MobAimbot")
 AddKeybindPicker(CombatTab, "Mob Aimbot Key", "MobAimbotKey")
 AddDropdown(CombatTab, "Aimbot Smoothness", {"0.1", "0.25", "0.5", "0.75", "1.0"}, "AimbotSmoothness")
-AddNumberInput(CombatTab, "Stop Aimbot At Health", "DisableAtHealth") -- [الإضافة الجديدة]
+AddNumberInput(CombatTab, "Stop Aimbot At Health", "DisableAtHealth")
 AddListManager(CombatTab, "🛡️ Whitelist", _G.Config.Whitelist)
 AddListManager(CombatTab, "🎯 Target List", _G.Config.TargetList)
 
--- Visuals Tab (كما كانت بالضبط)
 AddToggle(VisualsTab, "Show Health Overlay", "ShowHealth", RefreshAllHealthUI)
-AddDropdown(VisualsTab, "Health Style", {"Modern Card", "Classic Bar", "Text Only", "Gradient Bar", "Compact Line"}, "HealthStyle", RefreshAllHealthUI)
+AddDropdown(VisualsTab, "Health Style", {"Modern Card", "Classic Bar", "Text Only"}, "HealthStyle", RefreshAllHealthUI)
 
--- Settings / Themes Tab (كما كانت بالضبط)
 AddDropdown(SettingsTab, "UI Theme Model", {"Cyber Dark", "Midnight Purple", "Emerald Neon", "Crimson Red", "Minimal Light"}, "CurrentTheme", ApplyTheme)
 
 ApplyTheme()
