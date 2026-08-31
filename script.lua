@@ -1,5 +1,5 @@
 -- ==========================================================
--- ⚔️ PVP COMBAT HUB (Xeno Executor & GitHub Ready) - V2
+-- ⚔️ PVP COMBAT HUB (Xeno Executor & GitHub Ready) - V2 (Full)
 -- ==========================================================
 
 local Players = game:GetService("Players")
@@ -21,8 +21,7 @@ _G.Config = {
     MobAimbotKey = "H",
     
     AimbotSmoothness = 0.25, 
-    DisableAtHealth = 3000, -- يتوقف الأيمبوت إذا وصل الدم لهذا الرقم
-    
+    DisableAtHealth = 3000, 
     TargetPart = "Head",
     HitboxSize = 18,
 
@@ -32,9 +31,6 @@ _G.Config = {
     MobHealthColor = {R = 255, G = 50, B = 50},
 
     CurrentTheme = "Cyber Dark",
-
-    Whitelist = {},
-    TargetList = {}
 }
 
 local Themes = {
@@ -53,10 +49,7 @@ local ThemeUpdateSignals = {}
 local function RemoveHealthUI(character)
     if character then
         local head = character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
-        if head then
-            local gui = head:FindFirstChild("HealthUIOverlay")
-            if gui then gui:Destroy() end
-        end
+        if head and head:FindFirstChild("HealthUIOverlay") then head.HealthUIOverlay:Destroy() end
     end
 end
 
@@ -71,7 +64,7 @@ local function CreateHealthUI(character, isPlayer)
     local bb = Instance.new("BillboardGui")
     bb.Name = "HealthUIOverlay"
     bb.Adornee = head
-    bb.Size = UDim2.new(0, 140, 0, 45) -- زيادة الارتفاع ليتسع لشريط الريس
+    bb.Size = UDim2.new(0, 140, 0, 45) 
     bb.StudsOffset = Vector3.new(0, 3, 0)
     bb.AlwaysOnTop = true
     bb.MaxDistance = math.huge
@@ -84,16 +77,13 @@ local function CreateHealthUI(character, isPlayer)
         local card = Instance.new("Frame"); card.Size = UDim2.new(1, 0, 1, 0); card.BackgroundColor3 = Color3.fromRGB(15, 18, 26); card.BackgroundTransparency = 0.2; card.Parent = bb
         local cCorner = Instance.new("UICorner"); cCorner.CornerRadius = UDim.new(0, 6); cCorner.Parent = card
         
-        -- اسم اللاعب
         local title = Instance.new("TextLabel"); title.Size = UDim2.new(1, -10, 0, 14); title.Position = UDim2.new(0, 5, 0, 2); title.BackgroundTransparency = 1; title.Text = (isPlayer and "👤 " or "👾 ") .. character.Name; title.TextColor3 = Color3.fromRGB(240, 240, 240); title.Font = Enum.Font.GothamBold; title.TextSize = 9; title.TextXAlignment = Enum.TextXAlignment.Left; title.Parent = card
         
-        -- شريط الدم
         local bg = Instance.new("Frame"); bg.Size = UDim2.new(1, -10, 0, 6); bg.Position = UDim2.new(0, 5, 0, 18); bg.BackgroundColor3 = Color3.fromRGB(35, 40, 55); bg.BorderSizePixel = 0; bg.Parent = card
         local bgCorner = Instance.new("UICorner"); bgCorner.CornerRadius = UDim.new(0, 4); bgCorner.Parent = bg
         local fill = Instance.new("Frame"); fill.Size = UDim2.new(math.clamp(hum.Health / math.max(1, hum.MaxHealth), 0, 1), 0, 1, 0); fill.BackgroundColor3 = mainColor; fill.BorderSizePixel = 0; fill.Parent = bg
         local fillCorner = Instance.new("UICorner"); fillCorner.CornerRadius = UDim.new(0, 4); fillCorner.Parent = fill
         
-        -- شريط الريس / الطاقة (Race/Energy)
         local raceBg = Instance.new("Frame"); raceBg.Size = UDim2.new(1, -10, 0, 4); raceBg.Position = UDim2.new(0, 5, 0, 28); raceBg.BackgroundColor3 = Color3.fromRGB(35, 30, 55); raceBg.BorderSizePixel = 0; raceBg.Parent = card
         local rBgCorner = Instance.new("UICorner"); rBgCorner.CornerRadius = UDim.new(0, 4); rBgCorner.Parent = raceBg
         local raceFill = Instance.new("Frame"); raceFill.Size = UDim2.new(0, 0, 1, 0); raceFill.BackgroundColor3 = Color3.fromRGB(170, 0, 255); raceFill.BorderSizePixel = 0; raceFill.Parent = raceBg
@@ -101,26 +91,20 @@ local function CreateHealthUI(character, isPlayer)
 
         local function UpdateBars()
             if not hum or not hum.Parent then return end
-            -- تحديث الدم
             fill.Size = UDim2.new(math.clamp(hum.Health / math.max(1, hum.MaxHealth), 0, 1), 0, 1, 0)
             
-            -- محاولة استخراج ريس V4 أو الطاقة المتاحة في مجلد اللاعب
-            local maxRace = 100
-            local currentRace = 0
+            local maxRace, currentRace = 100, 0
             local energyObj = character:FindFirstChild("Energy") or character:FindFirstChild("RaceMeter") or character:FindFirstChild("Awakening")
-            if energyObj and energyObj:IsA("NumberValue") or energyObj:IsA("IntValue") then
+            if energyObj and (energyObj:IsA("NumberValue") or energyObj:IsA("IntValue")) then
                 currentRace = energyObj.Value
                 local maxObj = character:FindFirstChild("MaxEnergy") or character:FindFirstChild("MaxRaceMeter")
                 if maxObj then maxRace = maxObj.Value else maxRace = math.max(currentRace, 100) end
             end
-            
             raceFill.Size = UDim2.new(math.clamp(currentRace / maxRace, 0, 1), 0, 1, 0)
         end
         
         hum.HealthChanged:Connect(UpdateBars)
-        RunService.RenderStepped:Connect(function()
-            if bb and bb.Parent then pcall(UpdateBars) end
-        end)
+        RunService.RenderStepped:Connect(function() if bb and bb.Parent then pcall(UpdateBars) end end)
     end
     hum.Died:Connect(function() bb:Destroy() end)
 end
@@ -131,29 +115,23 @@ local function RefreshAllHealthUI()
     end
 end
 
-Players.PlayerAdded:Connect(function(p)
-    p.CharacterAdded:Connect(function(c) task.defer(function() CreateHealthUI(c, true) end) end)
-end)
-for _, p in pairs(Players:GetPlayers()) do
-    if p ~= LocalPlayer and p.Character then task.defer(function() CreateHealthUI(p.Character, true) end)
-        p.CharacterAdded:Connect(function(c) task.defer(function() CreateHealthUI(c, true) end) end)
-    end
-end
+Players.PlayerAdded:Connect(function(p) p.CharacterAdded:Connect(function(c) task.defer(function() CreateHealthUI(c, true) end) end) end)
+for _, p in pairs(Players:GetPlayers()) do if p ~= LocalPlayer and p.Character then task.defer(function() CreateHealthUI(p.Character, true) end) p.CharacterAdded:Connect(function(c) task.defer(function() CreateHealthUI(c, true) end) end) end end
 
 -- ==========================================
 -- 3. SMOOTH & OPTIMIZED AIMBOT ENGINE
 -- ==========================================
 
-local function GetClosestToCamera(isPlayerTarget)
+local function GetClosestTarget()
     local closestPart = nil
     local shortestDistance = math.huge
     local viewportCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character then
-            local targetPart = p.Character:FindFirstChild(_G.Config.TargetPart) or p.Character:FindFirstChild("HumanoidRootPart")
-            local hum = p.Character:FindFirstChild("Humanoid")
-            -- شرط جديد: يتجاهل اللاعب إذا كان دمه أقل من أو يساوي الحد المطلوب
+    local function CheckTarget(character)
+        if character then
+            local targetPart = character:FindFirstChild(_G.Config.TargetPart) or character:FindFirstChild("HumanoidRootPart")
+            local hum = character:FindFirstChild("Humanoid")
+            
             if targetPart and hum and hum.Health > _G.Config.DisableAtHealth then
                 local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
                 if onScreen then
@@ -166,25 +144,28 @@ local function GetClosestToCamera(isPlayerTarget)
             end
         end
     end
+
+    if _G.Config.PlayerAimbot then
+        for _, p in pairs(Players:GetPlayers()) do if p ~= LocalPlayer then CheckTarget(p.Character) end end
+    end
+
+    if _G.Config.MobAimbot then
+        local enemiesFolder = workspace:FindFirstChild("Enemies")
+        if enemiesFolder then
+            for _, mob in pairs(enemiesFolder:GetChildren()) do CheckTarget(mob) end
+        end
+    end
+
     return closestPart
 end
 
 RunService.RenderStepped:Connect(function()
-    local isAimbotActive = _G.Config.PlayerAimbot
-
-    if isAimbotActive then
-        -- تفريغ الهدف إذا مات أو نزل دمه عن الحد المسموح
+    if _G.Config.PlayerAimbot or _G.Config.MobAimbot then
         if lockedTargetPart and lockedTargetPart.Parent then
             local hum = lockedTargetPart.Parent:FindFirstChild("Humanoid")
-            if not hum or hum.Health <= _G.Config.DisableAtHealth then
-                lockedTargetPart = nil
-            end
+            if not hum or hum.Health <= _G.Config.DisableAtHealth then lockedTargetPart = nil end
         end
-
-        if not lockedTargetPart then
-            lockedTargetPart = GetClosestToCamera(true)
-        end
-
+        if not lockedTargetPart then lockedTargetPart = GetClosestTarget() end
         if lockedTargetPart and lockedTargetPart.Parent then
             pcall(function()
                 local targetCFrame = CFrame.new(Camera.CFrame.Position, lockedTargetPart.Position)
@@ -199,8 +180,9 @@ end)
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     if input.KeyCode == Enum.KeyCode[_G.Config.PlayerAimbotKey] then
-        _G.Config.PlayerAimbot = not _G.Config.PlayerAimbot
-        lockedTargetPart = nil
+        _G.Config.PlayerAimbot = not _G.Config.PlayerAimbot; lockedTargetPart = nil
+    elseif input.KeyCode == Enum.KeyCode[_G.Config.MobAimbotKey] then
+        _G.Config.MobAimbot = not _G.Config.MobAimbot; lockedTargetPart = nil
     end
 end)
 
@@ -209,7 +191,7 @@ end)
 -- ==========================================
 
 local ScreenGui = Instance.new("ScreenGui"); ScreenGui.Name = "PvpCombatHubUI"; ScreenGui.Parent = gethui and gethui() or CoreGui
-local MainFrame = Instance.new("Frame"); MainFrame.Size = UDim2.new(0, 510, 0, 360); MainFrame.Position = UDim2.new(0.5, -255, 0.25, 0); MainFrame.Active = true; MainFrame.Draggable = true; MainFrame.Parent = ScreenGui
+local MainFrame = Instance.new("Frame"); MainFrame.Size = UDim2.new(0, 520, 0, 380); MainFrame.Position = UDim2.new(0.5, -260, 0.25, 0); MainFrame.Active = true; MainFrame.Draggable = true; MainFrame.Parent = ScreenGui
 local MainCorner = Instance.new("UICorner"); MainCorner.Parent = MainFrame
 local MainStroke = Instance.new("UIStroke"); MainStroke.Thickness = 1.5; MainStroke.Parent = MainFrame
 
@@ -242,18 +224,6 @@ local function CreateTab(tabName)
     return TabPage
 end
 
--- Function to add Number Input for Health Threshold
-local function AddNumberInput(parentPage, title, configVar)
-    local Frame = Instance.new("Frame"); Frame.Size = UDim2.new(0.96, 0, 0, 32); Frame.Parent = parentPage
-    local Corner = Instance.new("UICorner"); Corner.Parent = Frame
-    local Label = Instance.new("TextLabel"); Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Text = "  " .. title; Label.Font = Enum.Font.GothamMedium; Label.TextSize = 9; Label.TextXAlignment = Enum.TextXAlignment.Left; Label.BackgroundTransparency = 1; Label.Parent = Frame
-    local TextBox = Instance.new("TextBox"); TextBox.Size = UDim2.new(0.4, 0, 0.7, 0); TextBox.Position = UDim2.new(0.55, 0, 0.15, 0); TextBox.Text = tostring(_G.Config[configVar]); TextBox.Font = Enum.Font.GothamBold; TextBox.TextSize = 9; TextBox.Parent = Frame
-    local tbCorner = Instance.new("UICorner"); tbCorner.Parent = TextBox
-    local function UpdateInputStyle(theme) Corner.CornerRadius = UDim.new(0, math.max(4, theme.CornerRadius - 4)); tbCorner.CornerRadius = UDim.new(0, math.max(4, theme.CornerRadius - 6)); Frame.BackgroundColor3 = theme.CardBg; Label.TextColor3 = theme.Text; TextBox.BackgroundColor3 = theme.SidebarBg; TextBox.TextColor3 = theme.Accent end
-    table.insert(ThemeUpdateSignals, UpdateInputStyle)
-    TextBox.FocusLost:Connect(function() local num = tonumber(TextBox.Text); if num then _G.Config[configVar] = num else TextBox.Text = tostring(_G.Config[configVar]) end end)
-end
-
 local function AddToggle(parentPage, name, configVar, callback)
     local Button = Instance.new("TextButton"); Button.Size = UDim2.new(0.96, 0, 0, 32); Button.Text = "  " .. name; Button.Font = Enum.Font.GothamMedium; Button.TextSize = 9; Button.TextXAlignment = Enum.TextXAlignment.Left; Button.Parent = parentPage
     local BtnCorner = Instance.new("UICorner"); BtnCorner.Parent = Button
@@ -264,12 +234,43 @@ local function AddToggle(parentPage, name, configVar, callback)
     Button.MouseButton1Click:Connect(function() _G.Config[configVar] = not _G.Config[configVar]; ApplyTheme(); if callback then callback() end end)
 end
 
+local function AddInput(parentPage, title, configVar, isNumber, callback)
+    local Frame = Instance.new("Frame"); Frame.Size = UDim2.new(0.96, 0, 0, 32); Frame.Parent = parentPage
+    local Corner = Instance.new("UICorner"); Corner.Parent = Frame
+    local Label = Instance.new("TextLabel"); Label.Size = UDim2.new(0.5, 0, 1, 0); Label.Text = "  " .. title; Label.Font = Enum.Font.GothamMedium; Label.TextSize = 9; Label.TextXAlignment = Enum.TextXAlignment.Left; Label.BackgroundTransparency = 1; Label.Parent = Frame
+    local TextBox = Instance.new("TextBox"); TextBox.Size = UDim2.new(0.4, 0, 0.7, 0); TextBox.Position = UDim2.new(0.55, 0, 0.15, 0); TextBox.Text = tostring(_G.Config[configVar]); TextBox.Font = Enum.Font.GothamBold; TextBox.TextSize = 9; TextBox.Parent = Frame
+    local tbCorner = Instance.new("UICorner"); tbCorner.Parent = TextBox
+    local function UpdateInputStyle(theme) Corner.CornerRadius = UDim.new(0, math.max(4, theme.CornerRadius - 4)); tbCorner.CornerRadius = UDim.new(0, math.max(4, theme.CornerRadius - 6)); Frame.BackgroundColor3 = theme.CardBg; Label.TextColor3 = theme.Text; TextBox.BackgroundColor3 = theme.SidebarBg; TextBox.TextColor3 = theme.Accent end
+    table.insert(ThemeUpdateSignals, UpdateInputStyle)
+    TextBox.FocusLost:Connect(function() 
+        if isNumber then
+            local num = tonumber(TextBox.Text); if num then _G.Config[configVar] = num else TextBox.Text = tostring(_G.Config[configVar]) end
+        else
+            if TextBox.Text ~= "" then _G.Config[configVar] = TextBox.Text end
+        end
+        if callback then callback() end
+    end)
+end
+
+-- بناء التبويبات
 local CombatTab = CreateTab("⚔️ Combat")
 local SettingsTab = CreateTab("🎨 Settings")
 tabs[1].Page.Visible = true
 
+-- إعدادات القتال (تم استرجاع كل الخصائص)
 AddToggle(CombatTab, "Player Aimbot", "PlayerAimbot")
-AddNumberInput(CombatTab, "Stop Aimbot At Health (Max)", "DisableAtHealth")
-AddToggle(SettingsTab, "Show Player Health/Race UI", "ShowHealth", RefreshAllHealthUI)
+AddInput(CombatTab, "Player Aimbot Key", "PlayerAimbotKey", false)
+AddToggle(CombatTab, "Mob Aimbot (Enemies)", "MobAimbot")
+AddInput(CombatTab, "Mob Aimbot Key", "MobAimbotKey", false)
+AddInput(CombatTab, "Target Part (Head/HumanoidRootPart)", "TargetPart", false)
+AddInput(CombatTab, "Aimbot Smoothness", "AimbotSmoothness", true)
+AddInput(CombatTab, "Stop Aimbot At Health (Max)", "DisableAtHealth", true)
+
+-- الإعدادات العامة (تم استرجاع الثيمات)
+AddToggle(SettingsTab, "Show Player/Mob Health UI", "ShowHealth", RefreshAllHealthUI)
+AddInput(SettingsTab, "Hitbox Size", "HitboxSize", true)
+AddInput(SettingsTab, "Theme (Cyber Dark/Midnight Purple/Emerald Neon)", "CurrentTheme", false, function() 
+    if Themes[_G.Config.CurrentTheme] then ApplyTheme() end 
+end)
 
 ApplyTheme()
